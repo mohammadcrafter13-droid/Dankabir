@@ -1,186 +1,382 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>برنامک ایتا</title>
 
-  <!-- باید همیشه اول از همه، قبل از هر اسکریپت دیگری لود بشه -->
-  <script src="https://developer.eitaa.com/eitaa-web-app.js"></script>
+    <meta charset="UTF-8">
 
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-    }
+    <meta name="viewport"
+          content="width=device-width,
+                   initial-scale=1.0,
+                   maximum-scale=1.0,
+                   user-scalable=no">
 
-    html, body {
-      height: 100%;
-    }
+    <!-- Eitaa WebApp SDK -->
+    <script src="https://developer.eitaa.com/eitaa-web-app.js"></script>
 
-    body {
-      background: var(--tg-theme-bg-color, #f4f5f7);
-      color: var(--tg-theme-text-color, #1a1a1a);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      text-align: center;
-    }
+    <title>بازی مار</title>
 
-    .card {
-      background: var(--tg-theme-secondary-bg-color, #ffffff);
-      border-radius: 16px;
-      padding: 24px;
-      width: 100%;
-      max-width: 400px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    }
+    <style>
 
-    h1 {
-      font-size: 1.4rem;
-      margin-bottom: 10px;
-      color: var(--tg-theme-text-color, #1a1a1a);
-    }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-    p {
-      color: var(--tg-theme-hint-color, #6b7280);
-      margin-bottom: 20px;
-      line-height: 1.7;
-    }
+        body {
+            width: 100%;
+            min-height: 100vh;
 
-    .info-box {
-      background: rgba(0,0,0,0.03);
-      border-radius: 10px;
-      padding: 14px;
-      margin-bottom: 20px;
-      text-align: right;
-      font-size: 0.9rem;
-    }
+            background: var(--tg-theme-bg-color, #111);
+            color: var(--tg-theme-text-color, #fff);
 
-    .info-box div {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
-    }
+            font-family: Arial, sans-serif;
 
-    .info-box div:last-child {
-      border-bottom: none;
-    }
+            display: flex;
+            justify-content: center;
+            align-items: center;
 
-    .info-box span:first-child {
-      color: var(--tg-theme-hint-color, #6b7280);
-    }
+            overflow: hidden;
+        }
 
-    button {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      background: var(--tg-theme-button-color, #2563eb);
-      color: var(--tg-theme-button-text-color, #ffffff);
-      font-size: 1rem;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: opacity 0.15s;
-    }
+        .game-container {
+            width: 100%;
+            max-width: 500px;
 
-    button:active {
-      opacity: 0.8;
-    }
+            padding: 15px;
 
-    .status {
-      margin-top: 14px;
-      font-size: 0.8rem;
-      color: var(--tg-theme-hint-color, #6b7280);
-    }
-  </style>
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 15px;
+            font-size: 28px;
+        }
+
+        #game {
+            width: 100%;
+            max-width: 450px;
+
+            aspect-ratio: 1 / 1;
+
+            background: var(
+                --tg-theme-secondary-bg-color,
+                #222
+            );
+
+            border-radius: 15px;
+
+            display: block;
+
+            margin: auto;
+        }
+
+        .controls {
+            margin: 20px auto 0;
+
+            display: grid;
+
+            grid-template-columns: 70px 70px 70px;
+
+            grid-template-rows: 70px 70px;
+
+            gap: 8px;
+
+            justify-content: center;
+
+            direction: ltr;
+        }
+
+        .control {
+            border: none;
+
+            border-radius: 15px;
+
+            background: var(
+                --tg-theme-button-color,
+                #2481cc
+            );
+
+            color: var(
+                --tg-theme-button-text-color,
+                #fff
+            );
+
+            font-size: 25px;
+
+            cursor: pointer;
+
+            touch-action: manipulation;
+        }
+
+        .control:active {
+            transform: scale(0.92);
+        }
+
+        .up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .down {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+    </style>
+
 </head>
+
+
 <body>
 
-  <div class="card">
-    <h1>👋 خوش اومدی</h1>
-    <p>این یک برنامک نمونه است که به کیت توسعه‌ی ایتا (Eitaa Web App SDK) متصل شده.</p>
+    <div class="game-container">
 
-    <div class="info-box" id="userInfo">
-      <div><span>نام:</span><span id="userName">در حال بارگذاری...</span></div>
-      <div><span>شناسه کاربری:</span><span id="userId">-</span></div>
-      <div><span>پلتفرم:</span><span id="platform">-</span></div>
-      <div><span>نسخه SDK:</span><span id="sdkVersion">-</span></div>
+        <h1>🐍 بازی مار</h1>
+
+        <canvas id="game"></canvas>
+
+
+        <div class="controls">
+
+            <button class="control up">
+                ▲
+            </button>
+
+            <button class="control left">
+                ◀
+            </button>
+
+            <button class="control down">
+                ▼
+            </button>
+
+            <button class="control right">
+                ▶
+            </button>
+
+        </div>
+
     </div>
 
-    <button id="mainActionBtn">ارسال داده به بات</button>
-    <button id="closeBtn" style="background: #ef4444;">بستن برنامک</button>
 
-    <div class="status" id="status">در حال اتصال به ایتا...</div>
-  </div>
+    <script>
 
-<script>
-  // منتظر می‌مانیم تا مطمئن شویم اسکریپت SDK لود شده است
-  window.addEventListener('DOMContentLoaded', () => {
-    const statusEl = document.getElementById('status');
+        // ==========================
+        // اتصال به ایتا
+        // ==========================
 
-    if (typeof Eitaa === 'undefined' || !Eitaa.WebApp) {
-      statusEl.textContent = '⚠️ SDK ایتا لود نشد. این صفحه باید داخل اپ ایتا باز شود.';
-      statusEl.style.color = '#ef4444';
-      return;
-    }
+        const WebApp = Eitaa.WebApp;
 
-    const tg = Eitaa.WebApp;
+        WebApp.ready();
 
-    // اعلام آماده بودن برنامک به اپلیکیشن ایتا
-    tg.ready();
+        if (typeof WebApp.expand === "function") {
+            WebApp.expand();
+        }
 
-    // تمام صفحه کردن برنامک (در صورت پشتیبانی)
-    if (tg.expand) tg.expand();
 
-    // نمایش اطلاعات کاربر در صورت وجود
-    const user = tg.initDataUnsafe && tg.initDataUnsafe.user;
-    document.getElementById('userName').textContent = user
-      ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'ناشناس'
-      : 'در دسترس نیست';
-    document.getElementById('userId').textContent = user ? user.id : '-';
-    document.getElementById('platform').textContent = tg.platform || '-';
-    document.getElementById('sdkVersion').textContent = tg.version || '-';
+        // ==========================
+        // Canvas
+        // ==========================
 
-    statusEl.textContent = '✅ اتصال به ایتا برقرار شد';
-    statusEl.style.color = '#22c55e';
+        const canvas =
+            document.getElementById("game");
 
-    // نمایش دکمه اصلی ایتا (در پایین صفحه اپ) - اختیاری
-    if (tg.MainButton) {
-      tg.MainButton.setText('تایید و ادامه');
-      tg.MainButton.show();
-      tg.MainButton.onClick(() => {
-        tg.HapticFeedback && tg.HapticFeedback.impactOccurred('medium');
-        alert('دکمه اصلی ایتا کلیک شد');
-      });
-    }
+        const ctx =
+            canvas.getContext("2d");
 
-    // دکمه‌ی ارسال داده به بات
-    document.getElementById('mainActionBtn').addEventListener('click', () => {
-      const payload = JSON.stringify({ action: 'sample_action', value: Date.now() });
-      if (tg.sendData) {
-        tg.sendData(payload);
-      } else {
-        alert('این متد در نسخه فعلی SDK در دسترس نیست.');
-      }
-    });
 
-    // دکمه‌ی بستن برنامک
-    document.getElementById('closeBtn').addEventListener('click', () => {
-      if (tg.close) {
-        tg.close();
-      } else {
-        alert('این متد در نسخه فعلی SDK در دسترس نیست.');
-      }
-    });
-  });
-</script>
+        // اندازه زمین بازی
+        const gridSize = 20;
+
+
+        // ==========================
+        // تنظیم اندازه Canvas
+        // ==========================
+
+        function resizeCanvas() {
+
+            const size =
+                Math.min(
+                    window.innerWidth - 30,
+                    450
+                );
+
+            canvas.width = size;
+            canvas.height = size;
+        }
+
+
+        resizeCanvas();
+
+        window.addEventListener(
+            "resize",
+            resizeCanvas
+        );
+
+
+        // ==========================
+        // مار
+        // ==========================
+
+        const snake = [
+
+            {
+                x: 10,
+                y: 10
+            },
+
+            {
+                x: 9,
+                y: 10
+            },
+
+            {
+                x: 8,
+                y: 10
+            }
+
+        ];
+
+
+        // ==========================
+        // نمایش مار
+        // ==========================
+
+        function draw() {
+
+            const cellSize =
+                canvas.width / gridSize;
+
+
+            // پاک کردن صفحه
+            ctx.clearRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+
+            // رسم مار
+            snake.forEach(
+                (part, index) => {
+
+                    const padding = 2;
+
+                    const x =
+                        part.x * cellSize
+                        + padding;
+
+                    const y =
+                        part.y * cellSize
+                        + padding;
+
+                    const size =
+                        cellSize
+                        - padding * 2;
+
+
+                    if (index === 0) {
+
+                        ctx.fillStyle = "#2ed573";
+
+                    } else {
+
+                        ctx.fillStyle = "#7bed9f";
+
+                    }
+
+
+                    ctx.beginPath();
+
+                    ctx.roundRect(
+                        x,
+                        y,
+                        size,
+                        size,
+                        5
+                    );
+
+                    ctx.fill();
+
+                }
+            );
+
+        }
+
+
+        // ==========================
+        // کنترل‌ها
+        // ==========================
+
+        document
+            .querySelector(".up")
+            .addEventListener(
+                "click",
+                () => {
+
+                    console.log("UP");
+
+                }
+            );
+
+
+        document
+            .querySelector(".down")
+            .addEventListener(
+                "click",
+                () => {
+
+                    console.log("DOWN");
+
+                }
+            );
+
+
+        document
+            .querySelector(".left")
+            .addEventListener(
+                "click",
+                () => {
+
+                    console.log("LEFT");
+
+                }
+            );
+
+
+        document
+            .querySelector(".right")
+            .addEventListener(
+                "click",
+                () => {
+
+                    console.log("RIGHT");
+
+                }
+            );
+
+
+        // ==========================
+        // شروع
+        // ==========================
+
+        draw();
+
+    </script>
 
 </body>
+
 </html>

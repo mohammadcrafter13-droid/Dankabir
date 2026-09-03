@@ -1,1 +1,288 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بازی مار 🐍</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+  }
 
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    color: #fff;
+  }
+
+  h1 {
+    margin-bottom: 10px;
+    font-size: 2rem;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #4ade80, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .info {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+  }
+
+  .info span {
+    color: #4ade80;
+    font-weight: bold;
+  }
+
+  #gameCanvas {
+    background: #0b1220;
+    border: 3px solid #22d3ee;
+    border-radius: 12px;
+    box-shadow: 0 0 25px rgba(34, 211, 238, 0.4);
+  }
+
+  .hint {
+    margin-top: 15px;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    text-align: center;
+    max-width: 400px;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  .overlay.show { display: flex; }
+
+  .overlay h2 {
+    font-size: 2rem;
+    color: #f87171;
+  }
+
+  button {
+    padding: 10px 25px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #4ade80, #22d3ee);
+    color: #0f172a;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+
+  button:active { transform: scale(0.95); }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(3, 55px);
+    grid-template-rows: repeat(2, 55px);
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .controls button {
+    font-size: 1.4rem;
+    padding: 0;
+    background: #1e293b;
+    color: #22d3ee;
+    border: 2px solid #22d3ee;
+  }
+
+  #up { grid-column: 2; grid-row: 1; }
+  #left { grid-column: 1; grid-row: 2; }
+  #down { grid-column: 2; grid-row: 2; }
+  #right { grid-column: 3; grid-row: 2; }
+
+  @media (min-width: 700px) {
+    .controls { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <h1>🐍 بازی مار</h1>
+  <div class="info">
+    <div>امتیاز: <span id="score">0</span></div>
+    <div>بهترین: <span id="best">0</span></div>
+  </div>
+
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+  <div class="hint">با کلیدهای جهت‌دار یا W/A/S/D حرکت کن. روی موبایل از دکمه‌های پایین استفاده کن.</div>
+
+  <div class="controls">
+    <button id="up">↑</button>
+    <button id="left">←</button>
+    <button id="down">↓</button>
+    <button id="right">→</button>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <h2>باختی! 😵</h2>
+    <p>امتیاز نهایی: <span id="finalScore">0</span></p>
+    <button id="restartBtn">شروع دوباره</button>
+  </div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const box = 20;
+  const cols = canvas.width / box;
+  const rows = canvas.height / box;
+
+  let snake, direction, nextDirection, food, score, best, gameLoop, speed;
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const finalScoreEl = document.getElementById('finalScore');
+  const overlay = document.getElementById('overlay');
+
+  best = parseInt(localStorage.getItem('snakeBest') || '0', 10);
+  bestEl.textContent = best;
+
+  function randomFood() {
+    let pos;
+    do {
+      pos = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+      };
+    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+    return pos;
+  }
+
+  function init() {
+    snake = [{ x: 8, y: 10 }, { x: 7, y: 10 }, { x: 6, y: 10 }];
+    direction = 'RIGHT';
+    nextDirection = 'RIGHT';
+    score = 0;
+    speed = 130;
+    scoreEl.textContent = score;
+    food = randomFood();
+    overlay.classList.remove('show');
+    if (gameLoop) clearInterval(gameLoop);
+    gameLoop = setInterval(tick, speed);
+  }
+
+  function changeDirection(dir) {
+    const opposites = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+    if (dir !== opposites[direction]) nextDirection = dir;
+  }
+
+  document.addEventListener('keydown', e => {
+    const key = e.key.toLowerCase();
+    if (key === 'arrowup' || key === 'w') changeDirection('UP');
+    else if (key === 'arrowdown' || key === 's') changeDirection('DOWN');
+    else if (key === 'arrowleft' || key === 'a') changeDirection('LEFT');
+    else if (key === 'arrowright' || key === 'd') changeDirection('RIGHT');
+  });
+
+  document.getElementById('up').addEventListener('click', () => changeDirection('UP'));
+  document.getElementById('down').addEventListener('click', () => changeDirection('DOWN'));
+  document.getElementById('left').addEventListener('click', () => changeDirection('LEFT'));
+  document.getElementById('right').addEventListener('click', () => changeDirection('RIGHT'));
+  document.getElementById('restartBtn').addEventListener('click', init);
+
+  function tick() {
+    direction = nextDirection;
+    const head = { ...snake[0] };
+
+    if (direction === 'UP') head.y--;
+    else if (direction === 'DOWN') head.y++;
+    else if (direction === 'LEFT') head.x--;
+    else if (direction === 'RIGHT') head.x++;
+
+    // Wall collision
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+      return gameOver();
+    }
+    // Self collision
+    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+      return gameOver();
+    }
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      scoreEl.textContent = score;
+      food = randomFood();
+      if (speed > 60 && score % 5 === 0) {
+        speed -= 8;
+        clearInterval(gameLoop);
+        gameLoop = setInterval(tick, speed);
+      }
+    } else {
+      snake.pop();
+    }
+
+    draw();
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    for (let i = 0; i <= cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * box, 0);
+      ctx.lineTo(i * box, canvas.height);
+      ctx.stroke();
+    }
+    for (let j = 0; j <= rows; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, j * box);
+      ctx.lineTo(canvas.width, j * box);
+      ctx.stroke();
+    }
+
+    // food
+    ctx.fillStyle = '#f87171';
+    ctx.beginPath();
+    ctx.arc(food.x * box + box / 2, food.y * box + box / 2, box / 2 - 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // snake
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? '#4ade80' : '#22d3ee';
+      ctx.fillRect(s.x * box + 1, s.y * box + 1, box - 2, box - 2);
+    });
+  }
+
+  function gameOver() {
+    clearInterval(gameLoop);
+    if (score > best) {
+      best = score;
+      localStorage.setItem('snakeBest', best);
+      bestEl.textContent = best;
+    }
+    finalScoreEl.textContent = score;
+    overlay.classList.add('show');
+  }
+
+  init();
+</script>
+
+</body>
+</html>

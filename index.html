@@ -305,6 +305,23 @@ select.cs-native{
 .score-panel{position:relative;overflow:visible}
 .sp-mascot-wrap{position:absolute;top:-14px;left:-10px;width:46px;height:46px;z-index:4;cursor:pointer}
 .sp-mascot-wrap svg{width:100%;height:100%;display:block;overflow:visible}
+/* This mascot sits right at the score-panel's own left edge (left:-10px
+   above), which on desktop — where the score-panel itself can be
+   flush with the left side of a fairly narrow browser window — puts
+   it very close to the actual edge of the screen. The default speech
+   bubble centers itself on the mascot (transform:translateX(-50%)),
+   so with a bubble often 150-250px wide and only ~35-55px of room to
+   its left before running off-screen, half of it was rendering
+   outside the viewport and simply invisible. Anchoring the bubble by
+   its right edge instead makes it grow rightward, into the panel,
+   away from the screen edge, instead of spilling out past it. */
+.sp-mascot-wrap .sk-bubble{
+  left:auto;right:-6px;
+  transform:translateY(6px) scale(.7);
+  transform-origin:100% 100%;
+}
+.sp-mascot-wrap .sk-bubble.show{transform:translateY(0) scale(1)}
+.sp-mascot-wrap .sk-bubble::after{left:auto;right:14px;transform:none}
 .sp-mascot-wrap .sk-body{transform-origin:50% 60%;animation:pdFloat 3.2s ease-in-out infinite}
 .sp-mascot-wrap .sk-eye{animation:skBlink 4s ease-in-out infinite}
 .sp-mascot-wrap .sk-tongue{animation:skTongue 3s ease-in-out infinite}
@@ -455,7 +472,33 @@ button:focus-visible{outline:2px solid #55e993;outline-offset:2px}
     overflow-y:auto;
     overflow-x:hidden;
   }
-  .settings .card{max-height:none}
+  /* .home,.settings both center their card with align-items:center —
+     harmless while it fits, but once the card is taller than the
+     window, a centered flex item overflows equally above AND below,
+     and only the "after" (bottom) side of that overflow can ever be
+     reached by scrolling: scrollTop can't go negative, so whatever
+     pokes out above the fold stays permanently hidden no matter how
+     far the user scrolls. That's exactly why the bottom fields of a
+     long settings form (and, on the records page, the podium's
+     crown/speech-bubbles, which poke up above their row) went missing
+     on desktop. Anchoring to the top and centering the card itself
+     with margin:auto instead keeps the identical centered look while
+     the card fits, but falls back to plain top-anchored scrolling —
+     fully reachable in both directions — the moment it doesn't. */
+  .settings.page.active{
+    align-items:flex-start;
+  }
+  .settings .card{
+    max-height:none;
+    margin:34px auto;
+    /* overflow:auto (its normal, mobile value) clips anything that
+       pokes out of the card's own box — including, now that the
+       card's height is unbounded and the page scrolls instead, the
+       podium crown/speech-bubbles below, which are *meant* to render
+       outside the card's own flow. Nothing needs to scroll inside the
+       card itself anymore, so it's safe to stop clipping here. */
+    overflow:visible;
+  }
 }
 
 /* ===== Desktop window-resize fallback, take 2 =====
@@ -490,6 +533,23 @@ body.needs-scroll .page.active{
   height:auto!important;
   min-height:100%;
   overflow:visible!important;
+}
+/* Same centering trap as the (pointer:fine) rule above, but this time
+   guarded against by the JS fallback instead of a media-feature guess
+   — needed because that guess is exactly what's unreliable on hosts
+   like Eitaa's desktop WebView (see the comment above). Without this,
+   turning "needs-scroll" on made the .page itself scrollable but left
+   .settings pages still vertically centering an oversized .card, so
+   the same "can't scroll to see what's cut off above the fold" trap
+   as before — this time hiding the last few settings fields instead
+   of the whole form. */
+body.needs-scroll .settings.page.active{
+  align-items:flex-start!important;
+}
+body.needs-scroll .settings .card{
+  max-height:none!important;
+  overflow:visible!important;
+  margin:34px auto!important;
 }
 
 /* ===== Mobile/WebView animation performance =====
@@ -603,6 +663,17 @@ body.needs-scroll .page.active{
 .lb-podium.hidden{display:none}
 .pd-slot{display:flex;flex-direction:column;align-items:center;position:relative}
 .pd-slot-2{order:1}.pd-slot-1{order:2}.pd-slot-3{order:3}
+/* Slot 1 sits in the middle with the biggest mascot, a crown poking up
+   above it, and the mascot most likely to be animated/clicked — its
+   speech bubble is the widest and tallest of the three and can easily
+   overlap the neighbouring slots. None of the slots set a z-index, so
+   plain DOM order decided stacking (slot-2 painted first, then
+   slot-1, then slot-3 painted last/on top — see the order above),
+   which meant slot-3 always covered slot-1's crown/bubble wherever
+   they overlapped, regardless of who was actually in front visually.
+   Forcing slot-1 above both neighbours fixes that regardless of paint
+   order. */
+.pd-slot-1{z-index:2}
 .pd-mascot-wrap{position:relative;margin-bottom:6px;z-index:3}
 .pd-mascot{width:64px;height:64px;cursor:pointer;filter:drop-shadow(0 6px 10px rgba(0,0,0,.4));transition:transform .12s ease;touch-action:manipulation}
 .pd-slot-1 .pd-mascot{width:82px;height:82px}
@@ -2883,11 +2954,22 @@ body.needs-scroll .page.active{
   function checkOverflowScroll(){
     const activePage = document.querySelector(".page.active");
     if(!activePage) return;
+    // Measure the page's actual content wrapper (.card / .home-shell),
+    // not the .page element itself. .settings pages vertically center
+    // that wrapper with align-items:center — and a centered flex item
+    // that overflows its container is a known case where the
+    // container's own scrollHeight under-reports how tall the content
+    // really is (the browser only ever counts overflow that spills
+    // past the *end* edge; centering also pushes an equal amount past
+    // the *start* edge, which isn't reflected). Reading the wrapper's
+    // own scrollHeight instead sidesteps that entirely, since the
+    // wrapper itself isn't the thing doing the centering.
+    const contentEl = activePage.querySelector(":scope > .card, :scope > .home-shell") || activePage;
     // A rAF tick lets layout settle (e.g. right after a page swap) before
     // we measure, so the check isn't reading stale/mid-transition sizes.
     requestAnimationFrame(function(){
       const wasScrollable = document.body.classList.contains("needs-scroll");
-      const overflowAmount = activePage.scrollHeight - window.innerHeight;
+      const overflowAmount = contentEl.scrollHeight - window.innerHeight;
       // Hysteresis: once a page is in scrollable mode, keep it there until
       // there's a clear 40px+ margin of spare room, instead of flipping
       // back the instant scrollHeight <= innerHeight. Without this, a
@@ -2910,6 +2992,17 @@ body.needs-scroll .page.active{
   window.addEventListener("resize", checkOverflowScroll);
   window.addEventListener("orientationchange", function(){ setTimeout(checkOverflowScroll, 250); });
   checkOverflowScroll();
+  // The Vazirmatn web font can still be swapping in after this first
+  // check (it loads async and reflows text taller than the fallback
+  // font), which on desktop had no resize event to re-trigger this
+  // measurement afterward — a borderline page could measure as
+  // "fits" before the swap and stay stuck that way even once it no
+  // longer did. Re-check once fonts are actually ready, plus one more
+  // delayed pass as a safety net for any other late layout shifts.
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(checkOverflowScroll).catch(function(){});
+  }
+  setTimeout(checkOverflowScroll, 800);
 
   // ===== Browser/hardware back-gesture history bookkeeping =====
   // The Eitaa BackButton SDK (syncEitaaBackButton/handleEitaaBackButton

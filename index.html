@@ -803,15 +803,36 @@ body.needs-scroll .page.active{
 .page.game{height:100%;overflow:hidden}
 .game{height:100%;justify-content:flex-start}
 .game-top,.stage-info,.rank-chase{flex:0 0 auto}
-.board-wrap{flex:1 1 auto;min-height:0;width:100%;overflow:hidden;position:relative}
+/* The board must ALWAYS be a perfect square. Sizing it with height:100% plus
+   a max-width (the old approach) breaks that on portrait phones: the width
+   gets clamped to the screen but the height stays at 100% of the free space,
+   so the canvas turned into a tall rectangle — snake and apple were stretched
+   and the left/right edges were cut off. Now fitBoard() (JS) sets an exact
+   px width = height = min(free width, free height); this CSS only supplies a
+   square fallback until it runs. flex-basis is 0 so the board never affects
+   how much room the wrapper gets (no resize feedback loop). */
+.board-wrap{flex:1 1 0;min-height:0;width:100%;overflow:visible;position:relative;align-items:flex-start}
 #gameCanvas{
-  height:100%;width:auto;
-  max-height:100%;max-width:min(98vw,900px);
-  aspect-ratio:1;margin:0 auto;
+  flex:none;
+  width:min(100%,900px);height:auto;
+  max-width:none;max-height:none;
+  aspect-ratio:1;margin:0;
   transition:transform .28s cubic-bezier(.2,1.4,.4,1);
 }
 #gameCanvas.stage-pop{transform:scale(1.06)}
-@media(max-height:650px){#gameCanvas{max-height:100%}}
+@media(max-height:650px){#gameCanvas{max-height:none}}
+
+/* Header: never let the stats row (score / record / combo / power-ups) push
+   into the buttons on narrow screens — let it wrap instead — and respect the
+   notch / status-bar safe area at the top. */
+.game{padding-top:max(8px,env(safe-area-inset-top))}
+.game-top>div:first-child{min-width:0;flex:1 1 auto}
+.game-top .game-actions{flex:none}
+.stats{flex-wrap:wrap}
+@media(max-width:380px){
+  .exit-btn,.pause-btn{min-width:0;padding:9px 10px;gap:4px}
+  .stat{padding:5px 7px}
+}
 
 /* Compact info bars so the board keeps as much room as possible */
 .stage-info{padding:6px 12px;font-size:12.5px;margin-bottom:6px}
@@ -837,30 +858,224 @@ body.needs-scroll .page.active{
 /* ===== Overtake celebration banner (over the board) ===== */
 .chase-wrap{position:relative;width:min(600px,100%);margin:0 auto;flex:0 0 auto}
 .chase-wrap .rank-chase{width:100%;margin:0 auto 6px}
+/* Lives INSIDE the chase-wrap slot, anchored to its BOTTOM edge and
+   growing upward: it covers the slim rank bar (its own "proper place" —
+   the bar is about rank anyway) and may lean a few px into the header
+   gap above, but can never spill off-screen and never touches the
+   board where the snake moves. Compact two-tone card so it fits the
+   bar zone instead of dwarfing it. will-change promotes the pop
+   animation to the compositor so celebrating never costs a frame. */
 .pass-banner{
-  position:absolute;left:50%;top:50%;z-index:20;
-  transform:translate(-50%,-50%) scale(.6);
+  position:absolute;left:50%;bottom:0;top:auto;z-index:20;
+  transform:translate(-50%,0) scale(.6);
   opacity:0;pointer-events:none;
-  padding:14px 22px;border-radius:20px;text-align:center;
-  background:linear-gradient(145deg,rgba(255,196,60,.96),rgba(255,140,40,.94));
+  padding:7px 16px 8px;border-radius:14px;text-align:center;
+  background:linear-gradient(145deg,rgba(255,196,60,.97),rgba(255,140,40,.95));
   color:#22160a;font-weight:900;
-  box-shadow:0 18px 50px rgba(0,0,0,.45),0 0 0 4px rgba(255,255,255,.18) inset,0 0 60px rgba(255,190,70,.6);
-  white-space:nowrap;max-width:92%;
+  box-shadow:0 10px 28px rgba(0,0,0,.42),0 0 0 3px rgba(255,255,255,.2) inset,0 0 34px rgba(255,190,70,.5);
+  white-space:nowrap;max-width:min(94%,440px);
+  will-change:transform,opacity;
+  display:flex;flex-direction:column;align-items:center;
 }
-.pass-banner .pb-top{font-size:12px;opacity:.8;letter-spacing:.5px}
-.pass-banner .pb-main{font-size:21px;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
-.pass-banner .pb-sub{font-size:12.5px;margin-top:4px;opacity:.9}
+.pass-banner .pb-top{font-size:10px;opacity:.75;letter-spacing:.5px;line-height:1.25}
+.pass-banner .pb-main{font-size:15.5px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.pass-banner .pb-sub{font-size:11px;margin-top:1px;opacity:.85;line-height:1.25}
 .pass-banner.show{animation:passPop 1.9s cubic-bezier(.2,1.3,.35,1) forwards}
 @keyframes passPop{
-  0%{opacity:0;transform:translate(-50%,-30%) scale(.5) rotate(-6deg)}
-  14%{opacity:1;transform:translate(-50%,-50%) scale(1.14) rotate(2deg)}
-  24%{transform:translate(-50%,-50%) scale(.98) rotate(-1deg)}
-  34%{transform:translate(-50%,-50%) scale(1.03) rotate(0)}
-  80%{opacity:1;transform:translate(-50%,-50%) scale(1)}
-  100%{opacity:0;transform:translate(-50%,-78%) scale(.92)}
+  0%{opacity:0;transform:translate(-50%,10px) scale(.55) rotate(-5deg)}
+  14%{opacity:1;transform:translate(-50%,-5px) scale(1.07) rotate(2deg)}
+  26%{transform:translate(-50%,0) scale(.97) rotate(-1deg)}
+  38%{transform:translate(-50%,0) scale(1.02) rotate(0)}
+  80%{opacity:1;transform:translate(-50%,0) scale(1)}
+  100%{opacity:0;transform:translate(-50%,8px) scale(.9)}
 }
+/* Invisible one-shot style/layout warm-up (see warmGameAssets): forces
+   the browser to compute the card's styles and layout BEFORE the first
+   real overtake, so the first celebration doesn't pay first-paint cost
+   in the middle of gameplay. */
+.pass-banner.warm{animation:none!important;opacity:0!important;transition:none!important}
+.rank-chase.warm{animation:none!important}
 .rank-chase.pass{animation:rcPass 1s ease}
-@media(max-width:760px){.pass-banner .pb-main{font-size:18px}}
+@media(max-width:760px){.pass-banner .pb-main{font-size:14.5px}.pass-banner{padding:6px 13px 7px;border-radius:12px}.pass-banner .pb-sub{font-size:10.5px}}
+
+/* =====================================================================
+   ===== MOBILE SIZE TUNING (appended last so it wins the cascade) =====
+   On phones every pixel of chrome around the board is a pixel taken
+   away from the actual game. This block compresses the header, stat
+   chips, buttons and info bars, centers the board in whatever space
+   is left, and lets the home page scroll if its content is taller
+   than the screen — so nothing is ever clipped or wasted.
+   Safe-area insets are re-asserted here because the compact paddings
+   below would otherwise override the env() paddings set earlier.
+   ===================================================================== */
+@media(max-width:760px){
+  .game{
+    padding:max(6px,env(safe-area-inset-top))
+            max(6px,env(safe-area-inset-right))
+            max(6px,env(safe-area-inset-bottom))
+            max(6px,env(safe-area-inset-left));
+  }
+  .game-top{gap:6px;margin-bottom:6px}
+  .game-title{font-size:13.5px;margin-bottom:2px}
+  .stats{gap:5px}
+  .stat{padding:4px 7px;font-size:10.5px;border-radius:10px}
+  .stat b{font-size:12px}
+  .exit-btn,.pause-btn{min-width:58px;padding:8px 10px;font-size:12.5px;border-radius:11px}
+  .stage-info{padding:5px 10px;font-size:11.5px;border-radius:12px;margin-bottom:5px}
+  .rank-chase{padding:5px 10px 7px;border-radius:12px;margin-bottom:5px}
+  .rank-chase .rc-top{font-size:10.5px}
+  .rank-chase .rc-bar{height:5px;margin-top:5px}
+  .combo-bar{width:26px}
+  .stat.fx .fx-chip{font-size:10.5px}
+  .chase-wrap{margin-bottom:0}
+  /* The board fills the leftover space, vertically centered instead of
+     hugging the top and leaving a dead strip at the bottom. */
+  .board-wrap{align-items:center}
+  #gameCanvas{border-radius:16px;border-width:1px}
+  /* Home page: never clip the score panel on short screens — scroll it. */
+  .home-shell{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+  .home-main{align-content:start}
+}
+@media(max-width:360px){
+  .game-title{display:none}
+  .stat{padding:3px 6px;font-size:10px}
+  .stat b{font-size:11.5px}
+  .exit-btn,.pause-btn{min-width:0;padding:7px 8px;font-size:12px}
+}
+@media(max-height:620px) and (max-width:760px){
+  .stage-info{display:none}   /* free every pixel for the board in landscape-ish phones */
+  .game-top{margin-bottom:4px}
+}
+
+/* ===== Live "new record" celebration on the record stat ===== */
+#recordStat{transition:background .35s ease,border-color .35s ease,color .35s ease}
+#recordStat.rec-beat{
+  border-color:#ffd76a;background:rgba(60,42,8,.6);color:#ffe8a8;
+  box-shadow:0 0 16px rgba(255,215,106,.35);
+}
+#recordStat.rec-beat b{color:#ffd76a;text-shadow:0 0 12px rgba(255,215,106,.8)}
+
+/* =====================================================================
+   ===== RECORDS SECTION — graphic polish pass =========================
+   Everything here is transform/opacity/background-position only and
+   lives on the RECORDS screen (never while the 60fps game loop runs),
+   so the extra paint budget is free. All effects degrade gracefully.
+   ===================================================================== */
+
+/* --- Podium stage: soft spotlight behind the champions --- */
+.lb-podium::before{
+  content:"";position:absolute;left:50%;top:55%;width:135%;aspect-ratio:1.7;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,214,110,.15),rgba(255,214,110,.05) 55%,transparent 78%);
+  pointer-events:none;z-index:0;
+}
+/* Rising gold coins/stars drifting up behind the mascots */
+.pd-bg{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden;border-radius:inherit}
+.pd-coin{position:absolute;bottom:6%;left:12%;font-size:13px;opacity:0;
+  animation:pdRise 5.2s linear infinite;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.pd-coin.c2{left:48%;font-size:11px;animation-delay:1.7s;animation-duration:6.1s}
+.pd-coin.c3{left:78%;font-size:12px;animation-delay:3.4s;animation-duration:5.6s}
+@keyframes pdRise{
+  0%{transform:translateY(14px) rotate(-8deg);opacity:0}
+  12%{opacity:.85}
+  70%{opacity:.5}
+  100%{transform:translateY(-120px) rotate(10deg);opacity:0}
+}
+
+/* --- Podium entrance choreography: mascots drop in, stands rise --- */
+.pd-mascot-wrap{animation:pdDrop .6s cubic-bezier(.2,1.5,.4,1) backwards}
+.pd-slot-2 .pd-mascot-wrap{animation-delay:.05s}
+.pd-slot-1 .pd-mascot-wrap{animation-delay:.16s}
+.pd-slot-3 .pd-mascot-wrap{animation-delay:.27s}
+@keyframes pdDrop{from{opacity:0;transform:translateY(-30px) scale(.5)}to{opacity:1;transform:none}}
+.pd-stand{transform-origin:50% 100%;animation:pdStandUp .55s cubic-bezier(.2,1.3,.4,1) backwards}
+.pd-slot-2 .pd-stand{animation-delay:.1s}
+.pd-slot-1 .pd-stand{animation-delay:.22s}
+.pd-slot-3 .pd-stand{animation-delay:.34s}
+@keyframes pdStandUp{from{opacity:0;transform:scaleY(.15)}to{opacity:1;transform:none}}
+/* glossy lip on the top edge of each podium block */
+.pd-stand::before{content:"";position:absolute;top:0;left:10%;right:10%;height:7px;border-radius:8px;
+  background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0))}
+.pd-score{animation:pdScorePop .45s .4s cubic-bezier(.2,1.4,.4,1) backwards}
+@keyframes pdScorePop{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
+
+/* --- Rank chips: metallic medals (gold / silver / bronze) --- */
+.lb-rank{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+  margin:0 auto;border-radius:50%;font-weight:900;font-size:13px;color:#bfe6cd;
+  background:rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
+.lb-row.lb-top1 .lb-rank{background:radial-gradient(circle at 32% 28%,#fff7d6,#f3d98a 48%,#c9992e 100%);
+  color:#5c4408;box-shadow:0 2px 10px rgba(232,193,90,.45),inset 0 0 0 2px rgba(255,255,255,.4)}
+.lb-row.lb-top2 .lb-rank{background:radial-gradient(circle at 32% 28%,#ffffff,#dfe6ea 48%,#9fb0ba 100%);
+  color:#3d4a52;box-shadow:0 2px 10px rgba(201,211,218,.35),inset 0 0 0 2px rgba(255,255,255,.45)}
+.lb-row.lb-top3 .lb-rank{background:radial-gradient(circle at 32% 28%,#ffd9b0,#eab383 48%,#a86a3d 100%);
+  color:#5a3617;box-shadow:0 2px 10px rgba(215,154,95,.4),inset 0 0 0 2px rgba(255,255,255,.4)}
+
+/* --- Row entrance stagger (replays only when the table actually changes) --- */
+.lb-list .lb-row:nth-child(1){animation-delay:0ms}
+.lb-list .lb-row:nth-child(2){animation-delay:35ms}
+.lb-list .lb-row:nth-child(3){animation-delay:70ms}
+.lb-list .lb-row:nth-child(4){animation-delay:105ms}
+.lb-list .lb-row:nth-child(5){animation-delay:140ms}
+.lb-list .lb-row:nth-child(6){animation-delay:175ms}
+.lb-list .lb-row:nth-child(7){animation-delay:210ms}
+.lb-list .lb-row:nth-child(8){animation-delay:245ms}
+.lb-list .lb-row:nth-child(n+9){animation-delay:280ms}
+
+/* --- Light sweep across the three podium-finisher rows --- */
+.lb-row{position:relative}
+.lb-row.lb-top1::after,.lb-row.lb-top2::after,.lb-row.lb-top3::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(100deg,transparent 32%,rgba(255,255,255,.12) 50%,transparent 68%);
+  background-size:230% 100%;animation:lbShimmer 2.8s ease-in-out infinite;
+}
+.lb-row.lb-top2::after{animation-delay:.9s}
+.lb-row.lb-top3::after{animation-delay:1.8s}
+
+/* --- Soft green pulse ring around the player's own row --- */
+.lb-row.lb-me::before{content:"";position:absolute;inset:-2px;border-radius:16px;pointer-events:none;
+  animation:mePulse 2.4s ease-out infinite}
+@keyframes mePulse{0%{box-shadow:0 0 0 0 rgba(53,216,121,.32)}70%{box-shadow:0 0 0 8px rgba(53,216,121,0)}100%{box-shadow:0 0 0 0 rgba(53,216,121,0)}}
+
+/* --- "Your record" card: slow gold sheen + rank-badge pop --- */
+#myRecordCard{
+  background:
+    linear-gradient(105deg,transparent 42%,rgba(255,215,106,.13) 50%,transparent 58%) no-repeat,
+    linear-gradient(145deg,rgba(20,55,34,.97),rgba(10,32,20,.99));
+  background-size:250% 100%,100% 100%;
+  background-position:150% 0,0 0;
+  animation:mySheen 3.8s ease-in-out infinite;
+}
+@keyframes mySheen{0%,55%{background-position:150% 0,0 0}90%,100%{background-position:-50% 0,0 0}}
+#myRecordRank.bump{animation:rankBump .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes rankBump{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
+
+/* --- Tabs: active pill pops in, buttons press down --- */
+.lb-tab:active{transform:scale(.97)}
+.lb-tab.active{animation:tabIn .25s ease}
+@keyframes tabIn{from{transform:scale(.93);opacity:.6}to{transform:none;opacity:1}}
+
+/* --- Gradient title on the records page (guarded so old WebViews that
+       lack background-clip:text just keep the solid color) --- */
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  #recordsPage .settings-title h2{
+    background:linear-gradient(90deg,#ffe9a8,#ffd76a 45%,#7ff0a6);
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent;
+  }
+}
+
+/* --- Desktop hover lift for rows --- */
+@media(hover:hover){
+  .lb-row:hover{border-color:rgba(150,230,175,.32);background:rgba(255,255,255,.06)}
+}
+
+/* --- Respect users who prefer less motion --- */
+@media (prefers-reduced-motion:reduce){
+  .pd-coin,.pd-mascot-wrap,.pd-stand,.pd-score,.lb-tab.active,#myRecordCard{animation:none!important}
+  .lb-row,.lb-list .lb-row{animation:none!important}
+  .lb-row.lb-top1::after,.lb-row.lb-top2::after,.lb-row.lb-top3::after,
+  .lb-row.lb-me::before{animation:none!important;content:none}
+}
 </style></head>
 <body>
 
@@ -1112,7 +1327,7 @@ body.needs-scroll .page.active{
         <div class="game-title"> مارینو</div>
         <div class="stats">
           <div class="stat">امتیاز: <b id="score">0</b></div>
-          <div class="stat">رکورد: <b id="highScore">0</b></div>
+          <div class="stat" id="recordStat">رکورد: <b id="highScore">0</b></div>
           <div class="stat fx hidden" id="fxStat"></div>
           <div class="stat combo hidden" id="comboStat">کمبو <b id="comboMult">×۲</b>
             <span class="combo-bar"><i id="comboFill"></i></span></div></div></div>
@@ -1175,7 +1390,7 @@ body.needs-scroll .page.active{
         <div style="font-size:11.5px;color:#7fa78f;margin-top:-4px;">(رکوردهای مرحله‌ای در رکوردهای برتر ثبت نمی‌شوند)</div>
         <button id="simpleModeBtn" class="secondary-btn" style="width:100%;padding:13px 16px;">🐍 ساده</button>
         <button id="robotModeBtn" class="secondary-btn" style="width:100%;padding:13px 16px;">🤖 بازی با ربات</button>
-        <div style="font-size:11.5px;color:#7fa78f;margin-top:-4px;">(رکوردهای بازی با ربات فقط روی همین دستگاه ذخیره می‌شود)</div>
+        <div style="font-size:11.5px;color:#7fa78f;margin-top:-4px;">(رکوردهای بازی با ربات در جدول آنلاین جداگانه‌اش ثبت می‌شود)</div>
       </div>
     </div>
   </div>
@@ -1230,8 +1445,8 @@ body.needs-scroll .page.active{
       </div>
 
       <!-- ===== Records tabs: simple mode (shared online board) vs.
-           robot mode (this-device-only, since robot-mode scores are
-           never sent to the shared server). ===== -->
+           robot mode (its own separate online board, KV key
+           leaderboard_bot, stored with mode=robot). ===== -->
       <div class="lb-tabs" id="lbTabs" role="tablist">
         <button id="lbTabSimple" class="lb-tab active" role="tab" aria-selected="true">🐍 رکوردهای ساده</button>
         <button id="lbTabRobot" class="lb-tab" role="tab" aria-selected="false">🤖 رکوردهای بازی با ربات</button>
@@ -1265,19 +1480,28 @@ body.needs-scroll .page.active{
         </div>
       </div>
 
-      <!-- ===== Robot-mode records: local to this device only (نگه‌داری
-           در localStorage) — چون امتیازهای بازی با ربات به سرور
-           مشترک ارسال نمی‌شوند. ===== -->
+      <!-- ===== Robot-mode records: ONLINE table (mode=robot) =====
+           امتیازهای بازی با ربات مثل جدول ساده به همان Worker کلادفلر
+           ارسال می‌شوند، فقط در جدول جداگانه‌ای (کلید KV:
+           leaderboard_bot) ذخیره می‌شوند؛ اگر شبکه در دسترس نبود،
+           رکوردهای محلی همین دستگاه به‌عنوان پشتیبان نمایش داده
+           می‌شوند. -->
       <div id="robotLbSection" class="hidden">
-        <div class="lb-meta">
-          <span><span class="dot"></span><span>رکوردهای این دستگاه در حالت بازی با ربات</span></span>
+        <div class="lb-meta" id="botLbMeta">
+          <span><span class="dot"></span><span id="botLbMetaText">در حال بارگذاری…</span></span>
+          <span id="botLbCount"></span>
         </div>
+
+        <div id="botLbPodium" class="lb-podium hidden"></div>
+
         <div id="botLeaderboardStatus" style="text-align:center;color:#9fc9ad;padding:10px 0" class="hidden"></div>
         <div class="lb-head" id="botLeaderboardHead" aria-hidden="true">
           <span>#</span><span></span><span>بازیکن</span><span>امتیاز</span>
         </div>
         <div id="botLeaderboardList" class="lb-list" role="list" aria-live="polite"></div>
-        <button id="clearBotLeaderboardBtn" class="secondary-btn">پاک کردن رکوردهای ربات</button>
+
+        <button id="refreshBotLeaderboardBtn" class="secondary-btn">به‌روزرسانی رکوردهای ربات</button>
+        <button id="clearBotLeaderboardBtn" class="secondary-btn" style="opacity:.75;font-weight:600">پاک کردن رکوردهای محلی ربات (پشتیبان)</button>
       </div>
     </div>
   </section>
@@ -1583,6 +1807,9 @@ body.needs-scroll .page.active{
       const b = $("passBanner"); if(b) b.classList.remove("show");
       return;
     }
+    // Robot mode chases the SEPARATE robot table (mode=robot) — the two
+    // boards must never mix.
+    const chaseMode = gameMode === "robot" ? "robot" : "simple";
     chaseRows = [];
     chaseLoaded = false;
     chaseRank = null;
@@ -1593,9 +1820,10 @@ body.needs-scroll .page.active{
     }
     if(!isLeaderboardConfigured()) return;
     // Anything already fetched by the records page is good enough to show
-    // instantly; the fresh request below just corrects it a moment later.
-    if(lastLeaderboardRows.length) buildChaseRows(lastLeaderboardRows);
-    fetch(window.LEADERBOARD_API_URL + "/scores", {signal: timeoutSignal(8000)})
+    // instantly (simple board only — the robot table has its own snapshot
+    // below); the fresh request just corrects it a moment later.
+    if(chaseMode === "simple" && lastLeaderboardRows.length) buildChaseRows(lastLeaderboardRows);
+    fetch(window.LEADERBOARD_API_URL + "/scores?mode=" + chaseMode, {signal: timeoutSignal(8000)})
       .then(function(res){
         if(!res.ok) throw new Error("bad status");
         return res.json();
@@ -1730,6 +1958,12 @@ body.needs-scroll .page.active{
       direction={x:1,y:0};
       nextDirection={x:1,y:0};
       snakeDirty=true;
+      // Fresh board after the stage jump: no stale interpolation
+      // snapshots from the old layout.
+      prevSnake=[];
+      prevBotSnake=[];
+      lastTickTime=0;
+      deathFadeStart=0;
       foodSpriteType=null;
       rebuildObstacles();
       bgDirty=true;
@@ -1744,6 +1978,8 @@ body.needs-scroll .page.active{
     let n=3;
     const step=function(){
       countdownValue=n;
+      countdownAt=performance.now();
+      countdownStepMs=1000;
       beep(n>0 ? 520 : 760,0.08);
       draw();
       if(n<=0){
@@ -1801,16 +2037,48 @@ body.needs-scroll .page.active{
   let swallowStart = -Infinity;
   const SWALLOW_DURATION = 600;
 
-  // ===== Snake glow cache =====
-  // The snake's glow uses ctx.shadowBlur, which is one of the most
-  // expensive canvas operations there is — measured every frame it
-  // noticeably drags down low-end/webview devices. The snake's position
-  // only actually changes on each game tick (a few times a second), not on
-  // every animation frame, so we render the glowing snake once per tick
-  // onto a small offscreen canvas and then just drawImage() it every
-  // frame — visually identical, far cheaper.
-  let snakeCanvas = null, snakeCtx = null;
+  // ===================================================================
+  // ===== Game-juice upgrade state (smooth motion + ambient life) =====
+  // prevSnake/prevBotSnake hold each segment's cell position from the
+  // tick BEFORE the latest one. The render loop draws every segment
+  // lerped between its old and new cell by f = (now-lastTickTime)/tick,
+  // so the snake GLIDES across the lawn at 60fps instead of snapping
+  // one grid cell at a time — the single biggest "feel" upgrade there is.
+  let prevSnake = [];
+  let prevBotSnake = [];
+  let lastTickTime = 0;
+  let curInterval = 130;
+  // Death dissolve: on crash the snake bursts into particles and fades
+  // out over DEATH_FADE_MS before the game-over card appears — a real
+  // "hit-stop" moment instead of the board instantly being covered.
+  let deathFadeStart = 0;
+  const DEATH_FADE_MS = 620;
+  // Live "new record" celebration state (per run).
+  let runStartHigh = 0;
+  let recordBeaten = false;
+  // Ambient drifting particles (pollen / fireflies / stardust by theme).
+  let ambient = [];
+  let ambientTheme = null;
+  // Countdown pop timing (for the animated 3-2-1-GO numbers).
+  let countdownAt = 0;
+  let countdownStepMs = 480;
+  // Speed-line flicker accumulator for ⚡ turbo streaks.
+  let turboSeed = 0;
+
+  // ===== Snake rendering (upgraded) =====
+  // The old version pre-rendered the glowing snake once per tick onto an
+  // offscreen sprite because ctx.shadowBlur was too expensive to run every
+  // frame. With the new interpolated movement the snake's shape morphs
+  // EVERY frame, so that cache can't be used anymore — instead the glow
+  // was rebuilt as a cheap double-stroke (one wide translucent pass + one
+  // solid pass, no shadowBlur at all in the hot path), which costs a
+  // fraction of shadowBlur and keeps the snake crisp and glowing while it
+  // glides. snakeDirty is kept because many call sites still flip it as a
+  // "visuals changed" hint; it is simply no longer load-bearing.
   let snakeDirty = true;
+
+  // Throttle clock for mid-run high-score persistence (see the eat handler)
+  let highScoreLastSaveAt = 0;
 
   // ===== Background cache (grass + grid) =====
   // The lawn pattern + grid used to be re-filled/re-stroked on *every*
@@ -1828,13 +2096,73 @@ body.needs-scroll .page.active{
   // drawImage() to reproduce the same pulsing look.
   let foodSpriteCanvas = null, foodSpriteCtx = null, foodSpriteType = null, foodSpriteBaseR = 0;
 
+  // ===== Glow sprite cache (performance-critical) =====
+  // A soft radial "aura" is needed behind the food, the golden star, the
+  // power-up bubble and both snake heads. Building a fresh
+  // createRadialGradient for EACH of those on EVERY frame used to be one
+  // of the heaviest recurring costs in the render loop (gradient objects
+  // are expensive to create and each one forces extra GPU state changes).
+  // Instead each color's glow is rendered ONCE into a tiny 64px sprite and
+  // then stamped with drawImage() — which is GPU-accelerated and nearly
+  // free, no matter how many times per frame we reuse it.
+  const glowSpriteCache = {};
+  function glowSprite(rgb){
+    let c = glowSpriteCache[rgb];
+    if(c) return c;
+    c = document.createElement("canvas");
+    c.width = 64; c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32,32,0, 32,32,32);
+    grad.addColorStop(0, "rgba(" + rgb + ",1)");
+    grad.addColorStop(0.45, "rgba(" + rgb + ",.42)");
+    grad.addColorStop(1, "rgba(" + rgb + ",0)");
+    g.fillStyle = grad;
+    g.fillRect(0,0,64,64);
+    glowSpriteCache[rgb] = c;
+    return c;
+  }
+  // Stamps a soft glow centered at (x,y) with the given radius. alpha
+  // matches the old gradient color stops so the look stays identical.
+  function drawGlow(rgb, x, y, r, alpha){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(glowSprite(rgb), x-r, y-r, r*2, r*2);
+    ctx.restore();
+  }
+  // "#ff9f3a" → "255,159,58" — for looking up glow sprites by the hex
+  // colors already stored in the power-up config table.
+  function hexToRgb(hex){
+    const h = String(hex).replace("#","");
+    const full = h.length === 3 ? h.split("").map(function(ch){ return ch+ch; }).join("") : h;
+    const num = parseInt(full, 16) || 0;
+    return ((num>>16)&255) + "," + ((num>>8)&255) + "," + (num&255);
+  }
+
   $("highScore").textContent = highScore;
 
   // ===== Canvas resolution fix: match the canvas's real on-screen pixel
   // size (with devicePixelRatio) instead of a fixed 600x600 internal
   // resolution, so the snake/board ratio stays crisp and correct on any
   // screen size instead of being stretched by CSS. =====
+  // Makes the board a perfect square that fills the free space: side =
+  // min(free width, free height). Doing this in JS (instead of CSS
+  // height:100% + max-width) guarantees the canvas box is never a stretched
+  // rectangle, in any WebView, on any screen shape.
+  function fitBoard(){
+    const wrap = canvas.parentElement;
+    if(!wrap) return;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if(w < 10 || h < 10) return; // page hidden / not laid out yet
+    const side = Math.max(120, Math.floor(Math.min(w, h, 900)));
+    const px = side + "px";
+    if(canvas.style.width !== px || canvas.style.height !== px){
+      canvas.style.width = px;
+      canvas.style.height = px;
+    }
+  }
+
   function resizeCanvasToDisplaySize(){
+    fitBoard();
     const rect = canvas.getBoundingClientRect();
     if(rect.width < 10) return; // canvas hidden (page not active yet)
     // Cap the device pixel ratio at 2: beyond that the extra sharpness is
@@ -1843,8 +2171,15 @@ body.needs-scroll .page.active{
     // is what makes things crawl on 3x/4x-DPR phones inside webviews like
     // Eitaa's. Capping keeps the board just as crisp while cutting the
     // pixel count — and therefore the work per frame — substantially.
+    // A second, ABSOLUTE pixel cap on top of that: a big board on a 3x-DPR
+    // phone still lands at ~800-900 internal pixels, and every one of the
+    // dozens of fills/strokes per frame scales with that area. Phones
+    // (small viewports, weaker GPUs, webviews) get 620 — still visibly
+    // crisp at arm's length — while desktops get 1024. This is the single
+    // biggest smoothness win on mid/low-end phones.
     const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-    const pixelSize = Math.max(300, Math.round(rect.width * dpr));
+    const absCap = rect.width < 520 ? 620 : 1024;
+    const pixelSize = Math.max(300, Math.min(Math.round(rect.width * dpr), absCap));
     if(canvas.width !== pixelSize || canvas.height !== pixelSize){
       canvas.width = pixelSize;
       canvas.height = pixelSize;
@@ -2238,6 +2573,13 @@ body.needs-scroll .page.active{
   window.addEventListener("orientationchange", function(){
     setTimeout(resizeCanvasToDisplaySize, 250);
   });
+  // The free space above/around the board changes without any window resize
+  // (stage bar / rank bar appearing, header stats wrapping onto a 2nd line,
+  // the game page becoming visible) — watch the wrapper itself so the board
+  // always re-fits.
+  if(typeof ResizeObserver === "function" && canvas.parentElement){
+    new ResizeObserver(function(){ resizeCanvasToDisplaySize(); }).observe(canvas.parentElement);
+  }
 
   function loadSettings(){
     try{
@@ -2482,17 +2824,23 @@ body.needs-scroll .page.active{
     return undefined;
   }
 
-  // Called from endGame(): saves this device's best score to the shared
-  // online leaderboard (one row per device, only overwritten by a new
-  // personal best) — silently does nothing if the leaderboard isn't
-  // configured, the device is offline, OR (most importantly) the player
-  // has not explicitly opted in to sharing their name/score. Without
-  // consent, nothing about this device or player ever leaves it.
+  // Called from endGame(): saves this device's best score to the online
+  // leaderboard (one row per device, only overwritten by a new personal
+  // best) — silently does nothing if the leaderboard isn't configured, the
+  // device is offline, OR (most importantly) the player has not explicitly
+  // opted in to sharing their name/score. Without consent, nothing about
+  // this device or player ever leaves it.
+  // Two completely separate tables live on the Worker (see its keyFor()):
+  //   mode "simple" → KV key "leaderboard"      (the classic board)
+  //   mode "robot"  → KV key "leaderboard_bot"  (the play-vs-robot board)
+  // The mode is sent in the POST body so the Worker stores the score in
+  // the right table — that mismatch was exactly why robot scores never
+  // showed up in Cloudflare before.
   function submitScoreOnline(finalScore){
     if(!isLeaderboardConfigured() || finalScore <= 0) return Promise.resolve();
     if(!hasLeaderboardConsent()) return Promise.resolve();
     if(gameMode === "stage") return Promise.resolve(); // stage-mode scores never go to the shared leaderboard
-    if(gameMode === "robot") return Promise.resolve(); // robot-mode scores stay local to this device (see saveBotRecord)
+    if(gameMode !== "robot" && gameMode !== "simple") return Promise.resolve();
     try{
       const id = getDeviceId();
       const name = getPlayerName();
@@ -2503,7 +2851,13 @@ body.needs-scroll .page.active{
         // so the server can cryptographically verify the signed payload
         // before trusting it — required validation must happen there,
         // not on the client.
-        body: JSON.stringify({id: id, name: name, score: finalScore, initData: window.__eitaaInitData || null}),
+        body: JSON.stringify({
+          id: id,
+          name: name,
+          score: finalScore,
+          mode: gameMode === "robot" ? "robot" : "simple",
+          initData: window.__eitaaInitData || null
+        }),
         signal: timeoutSignal(8000)
       }).catch(function(){});
     }catch(e){ return Promise.resolve(); }
@@ -2752,7 +3106,13 @@ body.needs-scroll .page.active{
   let lastPodiumSignature = {full:"", overlay:""};
   function buildPodiumHtml(top3){
     const order = [2,1,3]; // classic left-to-right visual order
-    let html = "";
+    // Slow gold coins/stars rising behind the whole podium (decorative
+    // layer, pointer-events:none — the mascots stay fully clickable).
+    let html = '<div class="pd-bg" aria-hidden="true">' +
+        '<span class="pd-coin">🪙</span>' +
+        '<span class="pd-coin c2">⭐</span>' +
+        '<span class="pd-coin c3">🪙</span>' +
+      '</div>';
     order.forEach(function(rank){
       const r = top3[rank-1];
       if(!r){ html += '<div class="pd-slot pd-slot-'+rank+'"></div>'; return; }
@@ -2764,14 +3124,16 @@ body.needs-scroll .page.active{
           '</div>' +
           '<div class="pd-name">' + escapeHtml(displayName(r.name)) + '</div>' +
           '<div class="pd-score">' + formatScore(r.score) + '</div>' +
-          '<div class="pd-stand"><span class="pd-rank-num">'+rank+'</span></div>' +
+          '<div class="pd-stand"><span class="pd-rank-num">'+formatScore(rank)+'</span></div>' +
         '</div>';
     });
     return html;
   }
 
   function renderPodium(sorted, key){
-    const containerId = key === "overlay" ? "overlayLbPodium" : "lbPodium";
+    const containerId = key === "overlay" ? "overlayLbPodium"
+                      : key === "bot"     ? "botLbPodium"
+                      : "lbPodium";
     const el = $(containerId);
     if(!el) return;
     const top3 = sorted.slice(0,3);
@@ -2800,7 +3162,7 @@ body.needs-scroll .page.active{
       if(Math.random() < .5) showSnakeBubble(rowAvatar.parentElement || rowAvatar, randomSnakeLine());
     }
   }
-  ["lbPodium","overlayLbPodium","leaderboardList","overlayLeaderboardList"].forEach(function(id){
+  ["lbPodium","overlayLbPodium","botLbPodium","leaderboardList","overlayLeaderboardList","botLeaderboardList"].forEach(function(id){
     const el = $(id);
     if(el) el.addEventListener("click", onSnakeClick);
   });
@@ -2885,7 +3247,18 @@ body.needs-scroll .page.active{
     return sorted;
   }
 
+  // Perf: toLocaleString("fa-IR") builds a brand-new Intl.NumberFormat on
+  // EVERY call, and the very first call also makes the engine load the
+  // whole fa-IR ICU data set — that first call can stall a weaker device
+  // for a good fraction of a second, exactly around the first overtakes
+  // of a run. One shared formatter (created + warmed once at page load)
+  // makes every call after that essentially free.
+  let __faFmt = null;
+  try{ __faFmt = new Intl.NumberFormat("fa-IR"); __faFmt.format(1234); }catch(e){ __faFmt = null; }
   function formatScore(n){
+    if(__faFmt){
+      try{ return __faFmt.format(n); }catch(e){}
+    }
     try{ return n.toLocaleString("fa-IR"); }catch(e){ return String(n); }
   }
 
@@ -2910,8 +3283,9 @@ body.needs-scroll .page.active{
       delta = '<span class="lb-delta ' + (up?"up":"down") + '" title="' +
         (up ? "رتبه بهتر شده" : "رتبه پایین‌تر رفته") + '">' + (up?"▲":"▼") + '</span>';
     }
-    const medals = {1:"🥇",2:"🥈",3:"🥉"};
-    const rankLabel = medals[r.rank] || String(r.rank);
+    // Ranks render as metallic circular chips (gold/silver/bronze for the
+    // top three — see the .lb-rank styles); Persian digits via formatScore.
+    const rankLabel = formatScore(r.rank);
     const color = avatarColorFor(r.id || r.name);
     const snakeIcon = svgSnake({rank: (r.rank>=1 && r.rank<=3) ? r.rank : null, color: color});
     return '<div class="'+cls+'" role="listitem">' +
@@ -2995,12 +3369,28 @@ body.needs-scroll .page.active{
     if(metaText) metaText.textContent = lastSuccessfulFetchAt ? "به‌روزرسانی " + timeAgoLabel(lastSuccessfulFetchAt) : "در حال بارگذاری…";
     if(meta) meta.classList.remove("stale");
     const countEl = $("leaderboardCount");
-    if(countEl) countEl.textContent = count ? count.toLocaleString("fa-IR") + " بازیکن" : "";
+    if(countEl) countEl.textContent = count ? formatScore(count) + " بازیکن" : "";
   }
 
   // Highlights the signed-in Eitaa user's own row above the full list —
   // this is what makes "your record" visible at a glance instead of
   // having to scroll and find your own name in the list.
+  // Polish: the score counts up to its new value and the rank badge pops
+  // whenever either of them changes (re-polls every few seconds otherwise
+  // leave the card static).
+  let myRecordShownScore = null;
+  let myRecordShownRank = null;
+  function animateCountUp(el, from, to){
+    if(from === null || from === to || from > to){ el.textContent = formatScore(to); return; }
+    const start = performance.now(), dur = 550;
+    const step = function(t){
+      const k = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = formatScore(Math.round(from + (to - from) * eased));
+      if(k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
   function updateMyRecordCard(rows){
     const card = $("myRecordCard");
     if(!card) return;
@@ -3008,19 +3398,31 @@ body.needs-scroll .page.active{
     const idx = rows.findIndex(function(r){ return r.id === myId; });
     if(idx === -1){
       card.classList.add("hidden");
+      myRecordShownScore = null;
+      myRecordShownRank = null;
       return;
     }
     card.classList.remove("hidden");
-    $("myRecordScore").textContent = formatScore(rows[idx].score);
-    $("myRecordRank").textContent = "#" + rows[idx].rank;
+    const row = rows[idx];
+    animateCountUp($("myRecordScore"), myRecordShownScore, row.score);
+    myRecordShownScore = row.score;
+    const rankEl = $("myRecordRank");
+    rankEl.textContent = "#" + row.rank;
+    if(myRecordShownRank !== null && myRecordShownRank !== row.rank){
+      rankEl.classList.remove("bump");
+      void rankEl.offsetWidth;
+      rankEl.classList.add("bump");
+    }
+    myRecordShownRank = row.rank;
   }
 
   // ===================================================================
-  // ===== Robot-mode records: kept ONLY on this device (localStorage) =====
-  // Robot-mode scores are never sent to the shared online leaderboard
-  // (see submitScoreOnline), so they get their own small local "top
-  // scores" list instead, shown on the "رکوردهای بازی با ربات" tab of
-  // the records page and on the game-over screen after a robot round.
+  // ===== Robot-mode records: ONLINE (mode=robot on the same Worker) ====
+  // امتیازهای بازی با ربات هم مثل جدول ساده به همان Worker کلادفلر
+  // ارسال می‌شوند؛ فقط با mode=robot تا در جدول جداگانه (کلید KV
+  // leaderboard_bot) ذخیره شوند. یک نسخه‌ی محلی (localStorage) هم
+  // به‌عنوان پشتیبان برای زمانی که شبکه در دسترس نیست نگه داشته
+  // می‌شود.
   // ===================================================================
   const BOT_RECORDS_KEY = "snakeBotRecords";
   const BOT_RECORDS_MAX = 50;
@@ -3047,49 +3449,158 @@ body.needs-scroll .page.active{
     lsSet(BOT_RECORDS_KEY, "[]");
   }
 
-  // Renders the local bot-mode records into the given list/head/status
-  // element ids — shared between the records page tab and the game-over
-  // mini leaderboard so the two never drift out of sync in appearance.
-  function renderBotRecordsInto(listId, headId, statusId, podiumKey){
+  // Turns the local fallback records into ranked rows (same shape the
+  // online board produces) for both fallback renderers below.
+  function localBotRows(limit){
     const records = getBotRecords();
     const myId = getDeviceId();
     const myName = getPlayerName();
-    const rows = records.map(function(r, i){
+    return records.slice(0, limit || records.length).map(function(r, i){
       return {id: myId, name: myName, score: r.score, rank: i+1};
     });
+  }
 
-    const listEl = $(listId);
-    const headEl = headId ? $(headId) : null;
-    const statusEl = statusId ? $(statusId) : null;
-
-    if(podiumKey) renderPodium(rows, podiumKey);
-
+  // Offline / error fallback for the records-page robot tab: shows this
+  // device's own saved robot scores so the tab is never dead.
+  function renderLocalBotFallback(statusEl){
+    const rows = localBotRows();
+    renderPodium(rows, "bot");
     if(!rows.length){
-      if(headEl) headEl.classList.add("hidden");
-      if(listEl) listEl.innerHTML = "";
-      if(statusEl){
-        statusEl.textContent = "هنوز با ربات بازی نکرده‌ای؛ اولین رکوردت رو بزن!";
-        statusEl.classList.remove("hidden");
-      }
+      statusEl.textContent = "هنوز با ربات بازی نکرده‌ای؛ اولین رکوردت رو بزن!";
+      statusEl.classList.remove("hidden");
+      $("botLeaderboardHead").classList.add("hidden");
+      $("botLeaderboardList").innerHTML = "";
+      return;
+    }
+    statusEl.textContent = "آفلاین — رکوردهای این دستگاه نمایش داده می‌شود";
+    statusEl.classList.remove("hidden");
+    $("botLeaderboardHead").classList.remove("hidden");
+    $("botLeaderboardList").innerHTML = rows.map(function(r){ return buildRowHtml(r, getDeviceId()); }).join("");
+  }
+
+  // Full ONLINE robot leaderboard for the records page tab.
+  let botLbRequestSeq = 0;
+  function loadBotLeaderboard(){
+    const listEl = $("botLeaderboardList");
+    const headEl = $("botLeaderboardHead");
+    const statusEl = $("botLeaderboardStatus");
+    const metaText = $("botLbMetaText");
+    const countEl = $("botLbCount");
+    if(!listEl) return;
+    const seq = ++botLbRequestSeq;
+
+    if(!isLeaderboardConfigured()){
+      headEl.classList.add("hidden");
+      listEl.innerHTML = "";
+      statusEl.textContent = "رکوردهای آنلاین هنوز فعال نشده.";
+      statusEl.classList.remove("hidden");
+      metaText.textContent = "غیرفعال";
+      countEl.textContent = "";
+      renderLocalBotFallback(statusEl);
       return;
     }
 
-    if(statusEl) statusEl.classList.add("hidden");
-    if(headEl) headEl.classList.remove("hidden");
-    if(listEl) listEl.innerHTML = rows.map(function(r){ return buildRowHtml(r, myId); }).join("");
+    headEl.classList.add("hidden");
+    statusEl.classList.add("hidden");
+    listEl.innerHTML = '<div class="lb-skel"></div><div class="lb-skel"></div><div class="lb-skel"></div>';
+    metaText.textContent = "در حال بارگذاری…";
+    countEl.textContent = "";
+
+    // mode=robot → the Worker serves the separate robot table
+    fetch(window.LEADERBOARD_API_URL + "/scores?mode=robot", {signal: timeoutSignal(8000)})
+      .then(function(res){
+        if(!res.ok) throw new Error("bad status");
+        return res.json();
+      })
+      .then(function(rows){
+        if(seq !== botLbRequestSeq) return;   // a newer request superseded this one
+        rows = (rows || []).map(function(r){
+          return {id: String(r.id), name: (r.name || "بازیکن").trim() || "بازیکن", score: Number(r.score) || 0};
+        });
+        const sorted = sortAndRankRows(rows);
+        const myId = getDeviceId();
+        renderPodium(sorted, "bot");
+        if(!sorted.length){
+          headEl.classList.add("hidden");
+          listEl.innerHTML = "";
+          statusEl.textContent = "هنوز رکوردی در جدول ربات ثبت نشده؛ اولین نفر باش!";
+          statusEl.classList.remove("hidden");
+          metaText.textContent = "آنلاین";
+          countEl.textContent = "";
+          return;
+        }
+        statusEl.classList.add("hidden");
+        headEl.classList.remove("hidden");
+        listEl.innerHTML = sorted.map(function(r){ return buildRowHtml(r, myId); }).join("");
+        metaText.textContent = "آنلاین";
+        countEl.textContent = formatScore(sorted.length) + " بازیکن";
+      })
+      .catch(function(){
+        if(seq !== botLbRequestSeq) return;
+        metaText.textContent = "آفلاین";
+        countEl.textContent = "";
+        renderLocalBotFallback(statusEl);
+      });
   }
 
   function renderBotLeaderboard(){
-    renderBotRecordsInto("botLeaderboardList", "botLeaderboardHead", "botLeaderboardStatus");
+    loadBotLeaderboard();
   }
 
+  // Mini robot leaderboard on the game-over overlay — same online table,
+  // with the local records as fallback when the worker can't be reached.
   function renderOverlayBotLeaderboard(){
-    renderBotRecordsInto("overlayLeaderboardList", null, "overlayLeaderboardStatus", "overlay");
-    $("overlayLeaderboardList").classList.remove("hidden");
+    const statusEl = $("overlayLeaderboardStatus");
+    const listEl = $("overlayLeaderboardList");
+    if(!isLeaderboardConfigured()){
+      listEl.innerHTML = "";
+      listEl.classList.add("hidden");
+      statusEl.textContent = "رکوردهای آنلاین هنوز فعال نشده.";
+      statusEl.classList.remove("hidden");
+      $("overlayLbPodium").classList.add("hidden");
+      return;
+    }
+    listEl.innerHTML = '<div class="lb-skel"></div><div class="lb-skel"></div><div class="lb-skel"></div>';
+    listEl.classList.remove("hidden");
+    statusEl.classList.add("hidden");
+    fetch(window.LEADERBOARD_API_URL + "/scores?mode=robot", {signal: timeoutSignal(8000)})
+      .then(function(res){
+        if(!res.ok) throw new Error("bad status");
+        return res.json();
+      })
+      .then(function(rows){
+        rows = (rows || []).map(function(r){
+          return {id: String(r.id), name: (r.name || "بازیکن").trim() || "بازیکن", score: Number(r.score) || 0};
+        });
+        const sorted = sortAndRankRows(rows);
+        if(!sorted.length){
+          listEl.innerHTML = "";
+          listEl.classList.add("hidden");
+          statusEl.textContent = "هنوز رکوردی در جدول ربات ثبت نشده؛ اولین نفر باش!";
+          statusEl.classList.remove("hidden");
+          $("overlayLbPodium").classList.add("hidden");
+          return;
+        }
+        renderOverlayLeaderboardRows(sorted);
+      })
+      .catch(function(){
+        const rows = localBotRows(5);
+        if(rows.length){
+          renderOverlayLeaderboardRows(rows);
+          statusEl.textContent = "آفلاین — رکوردهای این دستگاه نمایش داده می‌شود";
+          statusEl.classList.remove("hidden");
+        }else{
+          listEl.innerHTML = "";
+          listEl.classList.add("hidden");
+          statusEl.textContent = "خطا در دریافت رکوردها.";
+          statusEl.classList.remove("hidden");
+          $("overlayLbPodium").classList.add("hidden");
+        }
+      });
   }
 
   // ===== Records page tabs: simple (shared online board) vs. robot
-  // (this device only) =====
+  // (its own separate online board — KV key leaderboard_bot) =====
   function switchRecordsTab(tab){
     const isRobot = tab === "robot";
     $("lbTabSimple").classList.toggle("active", !isRobot);
@@ -3365,6 +3876,24 @@ body.needs-scroll .page.active{
   function checkOverflowScroll(){
     const activePage = document.querySelector(".page.active");
     if(!activePage) return;
+    // The GAME page is exempt from this fallback on purpose: it is
+    // designed to always be exactly one screen tall — the board itself
+    // flexes/shrinks to whatever space is left (fitBoard). Measuring it
+    // here would actually BREAK short/landscape screens: before the
+    // board is first fitted, the canvas' CSS aspect-ratio fallback makes
+    // the page's scrollHeight tall, which flipped on body.needs-scroll,
+    // which freed .game of its fixed height, which collapsed .board-wrap
+    // (flex-basis:0) to zero height — so fitBoard saw height<10 and
+    // never ran, and the board stayed oversized forever (a self-reinforcing
+    // trap). Removing the class whenever the game page is active keeps
+    // that loop from ever starting.
+    if(activePage.classList.contains("game")){
+      if(document.body.classList.contains("needs-scroll")){
+        document.body.classList.remove("needs-scroll");
+        window.scrollTo(0,0);
+      }
+      return;
+    }
     // Measure the page's actual content wrapper (.home-shell), not the
     // .page element itself. .home vertically centers that wrapper with
     // align-items:center — and a centered flex item that overflows its
@@ -3595,6 +4124,13 @@ body.needs-scroll .page.active{
     direction = {x:1,y:0};
     nextDirection = {x:1,y:0};
     snakeDirty = true;
+    // Reset all live-effect state so a fresh round starts clean.
+    prevSnake = [];
+    prevBotSnake = [];
+    lastTickTime = 0;
+    deathFadeStart = 0;
+    runStartHigh = highScore;
+    recordBeaten = false;
     if(botRespawnTimer){ clearTimeout(botRespawnTimer); botRespawnTimer = null; }
     botSnake = [];
     botAlive = false;
@@ -3612,9 +4148,27 @@ body.needs-scroll .page.active{
     );
   }
 
+  // ===== Adaptive quality ("liteMode") =====
+  // The render loop keeps a short exponential moving average of real frame
+  // times. If a device can't sustain ~38fps (frameEMA > 26ms) the loop
+  // latches liteMode for the rest of the session: purely decorative layers
+  // (ambient motes, golden sparkles, combo embers, turbo streaks, head
+  // halos) are skipped while every gameplay-critical element — snake,
+  // bot, food, power-ups, countdown, particles — keeps rendering exactly
+  // as before. Strong devices never notice; weak phones stop stuttering.
+  let liteMode = false;
+  let frameEMA = 16.7;
+  let lastFrameTs = 0;
   function startRenderLoop(){
     if(rafId) return;
-    const loop = function(){
+    const loop = function(ts){
+      if(lastFrameTs){
+        const dt = ts - lastFrameTs;
+        // ignore huge gaps (tab was backgrounded) so they don't fake a lag signal
+        if(dt > 0 && dt < 250) frameEMA = frameEMA*0.92 + dt*0.08;
+        if(!liteMode && frameEMA > 26) liteMode = true;
+      }
+      lastFrameTs = ts;
       draw();
       rafId = requestAnimationFrame(loop);
     };
@@ -3661,13 +4215,59 @@ body.needs-scroll .page.active{
     prepareBoardOnly();
     updateStageInfo();
     loadRankChase();
+    // The mode-select click is a real user gesture: create/resume the
+    // AudioContext right here so the first beep of the run never has to
+    // build audio infrastructure mid-game.
+    unlockAudio();
+    warmGameAssets();
     runCountdown(beginRun);
+  }
+
+  // ===== First-run warm-up (anti-freeze) =====
+  // Everything the game builds lazily on FIRST use — glow sprites, the
+  // food/star/power-up sprites, the celebration card's styles — used to
+  // be created mid-run, and the first few seconds of a run (exactly when
+  // the early overtakes happen) paid for all of it at once as brief
+  // freezes. Building them during the 3-2-1 countdown instead means the
+  // run itself starts fully warmed up and stays smooth from tick one.
+  let gameAssetsWarmed = false;
+  function warmGameAssets(){
+    if(gameAssetsWarmed) return;
+    gameAssetsWarmed = true;
+    try{
+      const s = canvas.width / cells;
+      // 1) Glow sprites for every color used by celebrations, combo
+      //    embers, food auras, power-ups and the bot — one 64px canvas
+      //    each, created here instead of mid-game.
+      ["255,210,74","255,243,176","127,240,166","255,159,91","255,255,255",
+       "255,233,168","255,215,106","255,106,74","255,60,50","255,60,110",
+       "150,80,255","255,205,60","255,159,58","87,200,255","255,60,60"
+      ].forEach(function(rgb){ glowSprite(rgb); });
+      // 2) Skins + board sprites at the current cell size.
+      skinGlowRgb(getStageSkin());
+      buildFoodSprite(s*0.34, getStageFood());
+      buildStarSprite(s*0.36);
+      POWER_KEYS.forEach(function(k){ buildPowerSprite(k, s*0.36); });
+      powerSpriteBaseR = s*0.36;
+      // 3) Style/layout warm for the overtake banner + rank bar: one
+      //    invisible forced layout with their full celebration styling
+      //    applied, so the first real overtake never pays first-paint
+      //    cost in the middle of gameplay (see .warm CSS).
+      const b = $("passBanner");
+      if(b){ b.classList.add("warm"); void b.offsetWidth;
+             setTimeout(function(){ b.classList.remove("warm"); }, 140); }
+      const rc = $("rankChase");
+      if(rc){ rc.classList.add("warm"); void rc.offsetWidth;
+              setTimeout(function(){ rc.classList.remove("warm"); }, 140); }
+    }catch(e){}
   }
 
   function runCountdown(cb){
     let n = 3;
     const step = function(){
       countdownValue = n;
+      countdownAt = performance.now();
+      countdownStepMs = 480;
       beep(n > 0 ? 440 : 640, 0.05);
       if(n <= 0){
         setTimeout(function(){ countdownValue = null; cb(); }, 380);
@@ -3713,6 +4313,14 @@ body.needs-scroll .page.active{
     direction = {x:1,y:0};
     nextDirection = {x:1,y:0};
     snakeDirty = true;
+    // Fresh round: clear interpolation snapshots + death fade, and
+    // remember the record this run is chasing (for the live celebration).
+    prevSnake = [];
+    prevBotSnake = [];
+    lastTickTime = 0;
+    deathFadeStart = 0;
+    runStartHigh = highScore;
+    recordBeaten = false;
 
     if(gameMode === "stage"){
       rebuildObstacles();
@@ -3903,6 +4511,22 @@ function resumeGame() {
     hideRankChase();
     hitFlashUntil = performance.now() + 320;
     shakeUntil = performance.now() + 340;
+    // ===== Death dissolve =====
+    // The snake bursts into particles along its whole body and fades out
+    // over DEATH_FADE_MS (drawSnake reads deathFadeStart for the alpha);
+    // the game-over card only appears AFTER that moment, so the crash
+    // lands as a real beat instead of being instantly covered by the UI.
+    deathFadeStart = performance.now();
+    if(canvas.width){
+      const s = canvas.width / cells;
+      const glowCol = (skinColors[getStageSkin()] || skinColors.classic).glow;
+      for(let i=0;i<snake.length;i+=2){
+        const p = snake[i];
+        spawnBurst(p.x*s+s/2, p.y*s+s/2, [glowCol, "#ffffff", "#ff6a4a"], 6);
+      }
+      // one bigger pop right at the head
+      spawnBurst(snake[0].x*s+s/2, snake[0].y*s+s/2, ["#ffffff","#ff6a4a",glowCol], 16);
+    }
     $("pauseBtn").disabled = true;
     $("pauseBtnText").textContent = "توقف";
     $("pauseBtn").classList.remove("resume");
@@ -3922,31 +4546,37 @@ function resumeGame() {
     drawScoreChart();
     if(gameMode === "robot") saveBotRecord(score);
     const scoreSubmitted = submitScoreOnline(score);
-    if(isNewRecord) flashNewRecord();
 
     beep(150,0.16);
     if(settings.haptic && navigator.vibrate) navigator.vibrate([40,30,40]);
-    showOverlay(
-      "",
-      "بازی تمام شد!",
-      (isNewRecord ? "🏆 رکورد جدید! " : "") + "امتیاز تو: " + score + " | رکورد: " + highScore,
-      " بازی دوباره",
-      startGame,
-      "both"
-    );
-    $("overlayLeaderboard").classList.remove("hidden");
-    if(gameMode === "robot"){
-      // Robot-mode scores never go to the shared server — show this
-      // device's own local bot-mode top scores instead of fetching online.
-      renderOverlayBotLeaderboard();
-    }else{
-      // Wait for our own score to actually finish saving server-side before
+    // Delayed game-over card — let the dissolve + shake play out first.
+    setTimeout(function(){
+      if(isNewRecord) flashNewRecord();
+      showOverlay(
+        "",
+        "بازی تمام شد!",
+        (isNewRecord ? "🏆 رکورد جدید! " : "") + "امتیاز تو: " + score + " | رکورد: " + highScore,
+        " بازی دوباره",
+        startGame,
+        "both"
+      );
+      $("overlayLeaderboard").classList.remove("hidden");
+      if(gameMode === "robot"){
+        // Robot-mode scores go to their OWN online table (mode=robot →
+        // KV key leaderboard_bot). Wait for the submit to finish first,
+        // same as the simple board, so the row we just wrote is actually
+        // in the list we're about to fetch. Falls back to this device's
+        // local robot scores if the network is unreachable.
+        Promise.resolve(scoreSubmitted).then(renderOverlayBotLeaderboard);
+      }else{
+        // Wait for our own score to actually finish saving server-side before
       // fetching the board — otherwise this fetch can win the race against
       // the submit above, and the just-finished game's own score/row would
       // be missing from the list even though it's about to be there a
       // moment later.
       Promise.resolve(scoreSubmitted).then(loadOverlayLeaderboardTop);
     }
+    }, DEATH_FADE_MS + 80);
   }
 
   // Auto-pause when the tab/app goes to background — a common UX
@@ -3959,6 +4589,12 @@ function resumeGame() {
 
   function gameLoop(){
     if(!running || paused) return;
+
+    // Snapshot the current cells so the render loop can interpolate the
+    // snake (and the bot) from where they were to where they now are —
+    // that lerp is what turns grid-stepped motion into a smooth glide.
+    prevSnake = snake.map(function(p){ return {x:p.x, y:p.y}; });
+    if(botAlive && botSnake.length) prevBotSnake = botSnake.map(function(p){ return {x:p.x, y:p.y}; });
 
     direction = nextDirection;
     let head = {
@@ -4016,6 +4652,8 @@ function resumeGame() {
 
     snake.unshift(head);
     snakeDirty = true;
+    lastTickTime = performance.now();
+    curInterval = getInterval();
 
     if(ate){
       const s = canvas.width / cells;
@@ -4053,7 +4691,35 @@ function resumeGame() {
       if(score > highScore){
         highScore = score;
         $("highScore").textContent = String(highScore);
-        lsSet("snakeHighScore", String(highScore));
+        // Perf: a localStorage write on EVERY bite while beating the record
+        // is synchronous I/O inside the game loop and shows up as brief
+        // hitches on laptops. The record is still safe — endGame() writes
+        // it unconditionally, so mid-run we only persist every ~4s.
+        if(Date.now() - highScoreLastSaveAt > 4000){
+          highScoreLastSaveAt = Date.now();
+          lsSet("snakeHighScore", String(highScore));
+        }
+      }
+      // Live "you just beat your own record" moment — fires ONCE per run,
+      // the instant the running score passes the record it started with:
+      // a gold flash on the record chip, a confetti burst on the board,
+      // a rising arpeggio and a double buzz. Pure celebration, zero logic.
+      if(!recordBeaten && runStartHigh > 0 && score > runStartHigh){
+        recordBeaten = true;
+        const rs = $("recordStat");
+        if(rs){
+          rs.classList.add("rec-beat");
+          setTimeout(function(){ rs.classList.remove("rec-beat"); }, 2600);
+        }
+        addFloatText(head.x*canvas.width/cells + canvas.width/cells/2,
+                     head.y*canvas.width/cells - canvas.width/cells,
+                     "🏆 رکورد جدید!", "#ffd76a");
+        spawnBurst(canvas.width/2, canvas.height*0.3,
+                   ["#ffd24a","#fff3b0","#7ff0a6","#ffffff"], 22);
+        beep(760,0.07);
+        setTimeout(function(){ beep(1010,0.07); }, 90);
+        setTimeout(function(){ beep(1340,0.12); }, 185);
+        if(settings.haptic && navigator.vibrate) navigator.vibrate([18,30,18,30,60]);
       }
       applyStageForScore();
       updateRankChase();
@@ -4100,18 +4766,23 @@ function resumeGame() {
   function updateAndDrawParticles(){
     if(!particles.length) return;
     const now = performance.now();
-    particles = particles.filter(p => now - p.born < p.life);
-    particles.forEach(p=>{
-      const elapsed = now - p.born;
-      const t = elapsed / p.life;
-      const x = p.x + p.vx*elapsed*0.06;
-      const y = p.y + p.vy*elapsed*0.06;
-      ctx.globalAlpha = Math.max(0, 1-t);
+    // In-place compaction instead of particles.filter(): filter allocated
+    // a brand-new array every single frame (GC churn = periodic frame
+    // hitches on phones). Write-index compaction allocates nothing.
+    let w = 0;
+    for(let i=0;i<particles.length;i++){
+      const p = particles[i];
+      if(now - p.born >= p.life) continue;
+      particles[w++] = p;
+      const t = (now - p.born) / p.life;
+      ctx.globalAlpha = 1 - t;
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(x,y,Math.max(1,3*(1-t)+1),0,Math.PI*2);
+      ctx.arc(p.x + p.vx*(now-p.born)*0.06, p.y + p.vy*(now-p.born)*0.06,
+              Math.max(1,3*(1-t)+1), 0, Math.PI*2);
       ctx.fill();
-    });
+    }
+    particles.length = w;
     ctx.globalAlpha = 1;
   }
 
@@ -4180,21 +4851,38 @@ function resumeGame() {
     if(settings.haptic && navigator.vibrate) navigator.vibrate([20,25,40]);
   }
 
+  // Perf: this runs EVERY frame while an effect is active. The old
+  // version rebuilt el.innerHTML 60×/s even when the text hadn't changed,
+  // which forced layout/paint work on the DOM alongside the canvas loop.
+  // A tiny signature cache means the DOM is only touched when the
+  // visible content actually changes (i.e. once per second per effect).
+  let fxLastSignature = "";
   function updateEffectUI(){
     const el = $("fxStat");
     if(!el) return;
     const now = performance.now();
     const active = POWER_KEYS.filter(function(k){ return now < effects[k]; });
     if(!active.length){
-      if(!el.classList.contains("hidden")) el.classList.add("hidden");
+      if(fxLastSignature !== ""){
+        fxLastSignature = "";
+        el.classList.add("hidden");
+        el.innerHTML = "";
+      }
       return;
     }
-    el.classList.remove("hidden");
-    el.innerHTML = active.map(function(k){
+    let sig = "";
+    let html = "";
+    for(let i=0;i<active.length;i++){
+      const k = active[i];
       const left = Math.ceil((effects[k] - now)/1000);
-      return '<span class="fx-chip" style="color:' + POWER_TYPES[k].color + '">' +
+      sig += k + ":" + left + ";";
+      html += '<span class="fx-chip" style="color:' + POWER_TYPES[k].color + '">' +
              POWER_TYPES[k].icon + ' ' + formatScore(left) + '</span>';
-    }).join("");
+    }
+    if(sig === fxLastSignature) return;   // nothing visibly changed — skip the DOM entirely
+    fxLastSignature = sig;
+    el.classList.remove("hidden");
+    el.innerHTML = html;
   }
 
   let floatTexts = [];            // "+5", "×3" popups drawn on the board
@@ -4246,24 +4934,35 @@ function resumeGame() {
 
   function resetCombo(){
     comboCount = 0; comboMult = 1; comboUntil = 0;
+    resetComboUiCache();
     updateComboUI();
   }
 
+  // Perf: cached strings/widths — the badge DOM is only written when a
+  // value actually changes, instead of three DOM writes every frame.
+  let comboLastVisible = false, comboLastMult = "", comboLastPct = -1;
   function updateComboUI(){
     const el = $("comboStat");
     if(!el) return;
     const now = performance.now();
     if(comboMult <= 1 || now >= comboUntil){
       if(now >= comboUntil && comboCount) { comboCount = 0; comboMult = 1; }
-      // Only touch the DOM when the badge is actually still on screen —
-      // this runs on every animation frame.
-      if(!el.classList.contains("hidden")) el.classList.add("hidden");
+      if(comboLastVisible){ comboLastVisible = false; el.classList.add("hidden"); }
       return;
     }
-    el.classList.remove("hidden");
-    $("comboMult").textContent = "×" + formatScore(comboMult);
-    const left = Math.max(0, (comboUntil - now) / COMBO_WINDOW);
-    $("comboFill").style.width = (left*100).toFixed(0) + "%";
+    if(!comboLastVisible){ comboLastVisible = true; el.classList.remove("hidden"); }
+    const multStr = "×" + formatScore(comboMult);
+    if(multStr !== comboLastMult){ comboLastMult = multStr; $("comboMult").textContent = multStr; }
+    const pct = Math.max(0, Math.min(100, ((comboUntil - now) / COMBO_WINDOW) * 100));
+    const pctInt = pct | 0;
+    if(pctInt !== comboLastPct){
+      comboLastPct = pctInt;
+      $("comboFill").style.width = pctInt + "%";
+    }
+  }
+  function resetComboUiCache(){
+    comboLastVisible = false; comboLastMult = ""; comboLastPct = -1;
+    fxLastSignature = "";
   }
 
   function addFloatText(x, y, text, color){
@@ -4353,39 +5052,165 @@ function resumeGame() {
       bgCtx.fillStyle = vignette;
       bgCtx.fillRect(0,0,bgCanvas.width,bgCanvas.height);
 
+      // Static stage art (the little snake+apple doodle on stage ≥ 2) is
+      // baked into the cached background too — it never changes from frame
+      // to frame, so repainting its beziers live on every animation frame
+      // was pure waste.
+      paintStageArt(bgCtx);
+
       bgDirty = false;
     }
     ctx.drawImage(bgCanvas,0,0);
   }
 
-  function drawStageArt(s){
+  function paintStageArt(g){
     if(stage < 2) return;
+    const s = canvas.width / cells;
     const cx = canvas.width - s*3.5;
     const cy = s*3.0;
     const r = Math.max(5, s*0.58);
-    ctx.save();
-    ctx.globalAlpha = 0.24;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = Math.max(3, s*0.72);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(cx-s*1.7,cy+s*0.65);
-    ctx.bezierCurveTo(cx-s*0.9,cy+s*1.55,cx+s*0.25,cy+s*1.55,cx+s*0.65,cy+s*0.45);
-    ctx.bezierCurveTo(cx+s*1.05,cy-s*0.6,cx+s*0.45,cy-s*1.35,cx-s*0.15,cy-s*1.0);
-    ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath(); ctx.arc(cx-s*0.15,cy-s*1.05,r*0.92,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#222222";
-    ctx.beginPath(); ctx.arc(cx+s*0.12,cy-s*1.25,r*0.12,0,Math.PI*2); ctx.fill();
+    g.save();
+    g.globalAlpha = 0.24;
+    g.strokeStyle = "#ffffff";
+    g.lineWidth = Math.max(3, s*0.72);
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(cx-s*1.7,cy+s*0.65);
+    g.bezierCurveTo(cx-s*0.9,cy+s*1.55,cx+s*0.25,cy+s*1.55,cx+s*0.65,cy+s*0.45);
+    g.bezierCurveTo(cx+s*1.05,cy-s*0.6,cx+s*0.45,cy-s*1.35,cx-s*0.15,cy-s*1.0);
+    g.stroke();
+    g.fillStyle = "#ffffff";
+    g.beginPath(); g.arc(cx-s*0.15,cy-s*1.05,r*0.92,0,Math.PI*2); g.fill();
+    g.fillStyle = "#222222";
+    g.beginPath(); g.arc(cx+s*0.12,cy-s*1.25,r*0.12,0,Math.PI*2); g.fill();
     const ax = cx+s*1.05, ay = cy+s*0.05;
-    ctx.fillStyle = "#d93b3b";
-    ctx.beginPath(); ctx.arc(ax,ay,r*0.7,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#4f9b45";
-    ctx.beginPath(); ctx.ellipse(ax+s*0.27,ay-r*0.78,s*0.33,s*0.15,-0.45,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle = "#6b4a2b";
-    ctx.lineWidth = Math.max(2,s*0.14);
-    ctx.beginPath(); ctx.moveTo(ax,ay-r*0.5); ctx.lineTo(ax+s*0.06,ay-r*0.92); ctx.stroke();
+    g.fillStyle = "#d93b3b";
+    g.beginPath(); g.arc(ax,ay,r*0.7,0,Math.PI*2); g.fill();
+    g.fillStyle = "#4f9b45";
+    g.beginPath(); g.ellipse(ax+s*0.27,ay-r*0.78,s*0.33,s*0.15,-0.45,0,Math.PI*2); g.fill();
+    g.strokeStyle = "#6b4a2b";
+    g.lineWidth = Math.max(2,s*0.14);
+    g.beginPath(); g.moveTo(ax,ay-r*0.5); g.lineTo(ax+s*0.06,ay-r*0.92); g.stroke();
+    g.restore();
+  }
+
+  // ===================================================================
+  // ===== Ambient drifting particles (pollen / fireflies / stardust) ====
+  // A dozen tiny motes slowly floating up across the board with a soft
+  // side-to-side sway. They give the playfield constant, alive motion —
+  // the difference between a painted backdrop and a real lawn — and
+  // adapt to the theme: warm pollen on grass, neon fireflies on disco,
+  // cold stardust in the galaxy. Plain arcs only (no shadowBlur), so
+  // the whole thing costs almost nothing per frame.
+  // ===================================================================
+  function ambientMoteColors(){
+    const theme = settings.bg || "classic";
+    if(theme === "neon")   return ["90,240,255","255,95,215","190,120,255"];
+    if(theme === "galaxy") return ["200,220,255","160,190,255","255,255,255"];
+    if(theme === "autumn") return ["255,220,150","255,170,95","255,240,200"];
+    return ["255,255,210","255,250,220","220,255,235"];
+  }
+  function seedAmbientParticles(force){
+    const theme = (settings.bg || "classic");
+    if(!force && theme === ambientTheme && ambient.length) return;
+    ambientTheme = theme;
+    ambient = [];
+    for(let i=0;i<14;i++){
+      const col = ambientMoteColors()[Math.floor(Math.random()*3)];
+      ambient.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        r: 1 + Math.random()*2.1,
+        sp: (0.10 + Math.random()*0.30) * (canvas.width/600),
+        ph: Math.random()*Math.PI*2,
+        am: 8 + Math.random()*24,
+        a: 0.10 + Math.random()*0.16,
+        // fillStyle pre-built once — no per-frame string concatenation
+        fs: "rgb(" + col + ")"
+      });
+    }
+  }
+  function drawAmbientParticles(){
+    if(!canvas.width) return;
+    if(liteMode) return;   // decorative layer — skipped on struggling devices
+    seedAmbientParticles(false);
+    const h = canvas.height;
+    const t = performance.now();
+    ctx.save();
+    for(let i=0;i<ambient.length;i++){
+      const m = ambient[i];
+      m.y -= m.sp;
+      if(m.y < -8){ m.y = h + 8; m.x = Math.random()*canvas.width; }
+      const sx = m.x + Math.sin(t/1600 + m.ph)*m.am;
+      const tw = 0.75 + 0.25*Math.sin(t/700 + m.ph*2);   // gentle twinkle
+      ctx.globalAlpha = m.a * tw;
+      ctx.fillStyle = m.fs;
+      ctx.beginPath();
+      ctx.arc(sx, m.y, m.r, 0, Math.PI*2);
+      ctx.fill();
+    }
     ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== ⚡ Turbo speed lines =====
+  // While the turbo power-up is active, short flickering wind streaks
+  // whip past BEHIND the head, opposite to the direction of travel —
+  // the classic "going fast" cue from arcade racers. Purely cosmetic.
+  function drawTurboStreaks(s){
+    if(!effectActive("fast") || !running || paused || gameOver || !snake.length) return;
+    if(liteMode) return;   // decorative layer — skipped on struggling devices
+    const now = performance.now();
+    const headX = snake[0].x*s + s/2, headY = snake[0].y*s + s/2;
+    const dx = direction.x, dy = direction.y;
+    const px = -dy, py = dx;   // perpendicular
+    turboSeed += 0.13;
+    ctx.save();
+    ctx.lineCap = "round";
+    for(let i=0;i<7;i++){
+      const off = ((i*turboSeed*37 + i*i*13) % 100)/100 - 0.5;   // pseudo-random lateral slot
+      const lateral = off * s*6;
+      const distBack = s*1.2 + ((i*53 + Math.floor(now/90)*29) % Math.floor(s*4));
+      const len = s*(1.1 + ((i*31 + Math.floor(now/70)*17) % 20)/22);
+      const bx = headX - dx*distBack + px*lateral;
+      const by = headY - dy*distBack + py*lateral;
+      ctx.globalAlpha = 0.10 + 0.16*Math.abs(Math.sin(now/95 + i*1.7));
+      ctx.strokeStyle = "#eaffff";
+      ctx.lineWidth = Math.max(1.4, s*0.07);
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - dx*len, by - dy*len);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== Combo ember trail =====
+  // While a ×2+ combo is burning, tiny embers keep puffing off the
+  // snake's head — a visual thermometer for "your streak is alive",
+  // alongside the combo bar in the header. Uses the normal particle
+  // system, so they inherit the same fade/drift behavior for free.
+  let lastEmberAt = 0;
+  function spawnComboEmbers(s){
+    if(comboMult < 2 || !running || paused || gameOver || !snake.length) return;
+    if(liteMode) return;   // decorative layer — skipped on struggling devices
+    const now = performance.now();
+    if(now - lastEmberAt < 170) return;
+    lastEmberAt = now;
+    const hx = snake[0].x*s + s/2, hy = snake[0].y*s + s/2;
+    const colors = comboMult >= 3 ? ["#ffd24a","#ff9f5b","#ff6a4a"] : ["#ffe9a8","#ffd76a"];
+    for(let i=0;i<2;i++){
+      particles.push({
+        x: hx + (Math.random()*2-1)*s*0.3,
+        y: hy + (Math.random()*2-1)*s*0.3,
+        vx: (Math.random()*2-1)*0.5,
+        vy: -0.4 - Math.random()*0.8,
+        born: now, life: 380 + Math.random()*220,
+        color: colors[i % colors.length]
+      });
+    }
+    if(particles.length > 130) particles.splice(0, particles.length - 130);
   }
 
   function draw(){
@@ -4408,7 +5233,7 @@ function resumeGame() {
 
     // ===== Lawn / grass-yard background (cached — see drawBackgroundCached) =====
     drawBackgroundCached();
-    drawStageArt(s);
+    drawAmbientParticles();
 
     if(obstacles.length){
       ctx.save();
@@ -4427,38 +5252,38 @@ function resumeGame() {
       ctx.restore();
     }
 
-    // Force the cached snake sprite to redraw every frame while the
-    // head-pop bounce or swallow bulge is playing, so those brief
-    // animations actually show through the per-tick cache instead of
-    // only updating on the next grid step (see drawSnakeCached's
-    // caching note above).
-    if(performance.now() < headPopUntil || performance.now() - swallowStart < SWALLOW_DURATION) snakeDirty = true;
-
     drawFood(s);
     drawGoldenFood(s);
     drawPowerUp(s);
-    drawSnakeCached(s);
+    drawSnake(s);
     if(gameMode === "robot" && botAlive && botSnake.length) drawBotSnakeSimple(s);
+    drawTurboStreaks(s);
     updateAndDrawParticles();
     drawFloatTexts();
     updateComboUI();
+    spawnComboEmbers(s);
 
     // Expanding "shockwave" ring where food was just eaten — a bold,
-    // glowing, short-lived stroke alongside the particle burst that reads
-    // as a real pop of energy rather than the food just silently vanishing.
+    // short-lived double stroke (wide translucent halo + bright core)
+    // alongside the particle burst. Same look as the old shadowBlur
+    // version, but without the single most expensive canvas op in the
+    // hot path.
     if(foodRing){
       const elapsed = performance.now() - foodRing.start;
       const dur = 420;
       if(elapsed < dur){
         const t = elapsed / dur;
+        const fade = 1 - t;
         ctx.save();
-        ctx.globalAlpha = 1 - t;
+        ctx.globalAlpha = fade;
         ctx.strokeStyle = foodRing.color;
-        ctx.shadowColor = foodRing.color;
-        ctx.shadowBlur = s*0.5*(1-t);
-        ctx.lineWidth = Math.max(1.5, s*0.09*(1-t*0.3));
         ctx.beginPath();
         ctx.arc(foodRing.x, foodRing.y, s*2.1*t, 0, Math.PI*2);
+        ctx.lineWidth = Math.max(6, s*0.22*(1-t*0.3));
+        ctx.globalAlpha = fade*0.35;
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1.5, s*0.09*(1-t*0.3));
+        ctx.globalAlpha = fade;
         ctx.stroke();
         ctx.restore();
       }else{
@@ -4467,17 +5292,22 @@ function resumeGame() {
     }
 
     // 🛡 Shield aura: a calm green rim while the snake is invulnerable.
+    // Two strokes (wide translucent + bright core) read exactly like the
+    // old shadowBlur glow but cost a fraction of it — shadowBlur is one
+    // of the slowest operations on mobile canvases.
     if(effectActive("shield")){
       const pulse = 0.5 + 0.5*Math.sin(performance.now()/220);
+      const wideW = Math.max(9, s*0.62), coreW = Math.max(3, s*0.3);
+      const inset = wideW/2 + 1;
       ctx.save();
-      ctx.strokeStyle = "rgba(127,240,166," + (0.35 + pulse*0.35).toFixed(3) + ")";
-      ctx.shadowColor = "rgba(127,240,166,.8)";
-      ctx.shadowBlur = 20;
-      ctx.lineWidth = Math.max(3, s*0.3);
-      const inset = ctx.lineWidth/2 + 1;
       ctx.beginPath();
       if(ctx.roundRect) ctx.roundRect(inset,inset,canvas.width-inset*2,canvas.height-inset*2,s*0.8);
       else ctx.rect(inset,inset,canvas.width-inset*2,canvas.height-inset*2);
+      ctx.strokeStyle = "rgba(127,240,166," + (0.16 + pulse*0.18).toFixed(3) + ")";
+      ctx.lineWidth = wideW;
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(127,240,166," + (0.38 + pulse*0.35).toFixed(3) + ")";
+      ctx.lineWidth = coreW;
       ctx.stroke();
       ctx.restore();
     }
@@ -4498,15 +5328,25 @@ function resumeGame() {
       ctx.fillRect(0,0,canvas.width,canvas.height);
     }
 
-    // Countdown overlay (3, 2, 1, GO)
+    // Countdown overlay (3, 2, 1, GO) — each number pops in with a short
+    // scale bounce and a soft glow, so the countdown itself feels juicy.
     if(countdownValue !== null && countdownValue !== undefined){
       ctx.fillStyle = "rgba(2,10,6,.4)";
       ctx.fillRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle = "#eafff2";
+      const cEl = Math.max(0, Math.min(1, (performance.now() - countdownAt) / countdownStepMs));
+      const pop = 1 + 0.35*(1 - Math.min(1, cEl*2.4));
+      const isGo = countdownValue <= 0;
+      ctx.save();
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.scale(pop, pop);
       ctx.font = "900 " + Math.round(canvas.width*0.2) + "px Tahoma,Arial,sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(countdownValue > 0 ? String(countdownValue) : "برو!", canvas.width/2, canvas.height/2);
+      ctx.shadowColor = isGo ? "rgba(127,240,166,.9)" : "rgba(127,240,166,.5)";
+      ctx.shadowBlur = canvas.width*0.03;
+      ctx.fillStyle = isGo ? "#7ff0a6" : "#eafff2";
+      ctx.fillText(countdownValue > 0 ? String(countdownValue) : "برو!", 0, 0);
+      ctx.restore();
     }
 
     if(shakeActive) ctx.restore();
@@ -4532,6 +5372,37 @@ function resumeGame() {
 
   // Golden food: a pulsing star with a countdown ring that drains as its
   // few seconds run out, so the urgency is visible at a glance.
+  // Perf: the star shape is pre-rendered ONCE into a sprite (its old
+  // per-frame shadowBlur + linear gradient were two of the most expensive
+  // recurring draws), then rotated/scaled with drawImage; the aura is a
+  // cached glow-sprite stamp. Only the countdown ring is drawn live.
+  let starSpriteCanvas = null, starSpriteR = 0;
+  function buildStarSprite(r){
+    const pad = Math.ceil(r*0.3);
+    const size = Math.ceil(r*2 + pad*2);
+    const c = document.createElement("canvas");
+    c.width = size; c.height = size;
+    const g = c.getContext("2d");
+    const grad = g.createLinearGradient(-r,-r,r,r);
+    grad.addColorStop(0,"#fff3b0"); grad.addColorStop(0.5,"#ffd24a"); grad.addColorStop(1,"#f09a20");
+    g.fillStyle = grad;
+    g.translate(size/2, size/2);
+    g.beginPath();
+    for(let i=0;i<10;i++){
+      const ang = (Math.PI/5)*i - Math.PI/2;
+      const rad = i%2 ? r*0.46 : r;
+      const px = Math.cos(ang)*rad, py = Math.sin(ang)*rad;
+      i ? g.lineTo(px,py) : g.moveTo(px,py);
+    }
+    g.closePath(); g.fill();
+    // baked glossy top-left highlight (was the shadowBlur's job before)
+    g.fillStyle = "rgba(255,255,255,.5)";
+    g.beginPath();
+    g.ellipse(-r*0.16,-r*0.2,r*0.14,r*0.24,-0.6,0,Math.PI*2);
+    g.fill();
+    starSpriteCanvas = c;
+    starSpriteR = r;
+  }
   function drawGoldenFood(s){
     if(!goldenFood) return;
     const now = performance.now();
@@ -4541,30 +5412,36 @@ function resumeGame() {
     const pulse = 1 + Math.sin(now/130)*0.12;
     const r = s*0.36*pulse;
 
-    const glow = ctx.createRadialGradient(fx,fy,0,fx,fy,r*2.6);
-    glow.addColorStop(0,"rgba(255,215,90,.55)");
-    glow.addColorStop(1,"rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(fx,fy,r*2.6,0,Math.PI*2); ctx.fill();
+    // aura from the glow sprite cache (was a per-frame radial gradient)
+    drawGlow("255,215,90", fx, fy, r*2.6, 0.55);
 
-    // star
+    if(!starSpriteCanvas || Math.abs(starSpriteR - s*0.36) > 0.5) buildStarSprite(s*0.36);
     ctx.save();
     ctx.translate(fx,fy);
     ctx.rotate(now/900);
-    const grad = ctx.createLinearGradient(-r,-r,r,r);
-    grad.addColorStop(0,"#fff3b0"); grad.addColorStop(0.5,"#ffd24a"); grad.addColorStop(1,"#f09a20");
-    ctx.fillStyle = grad;
-    ctx.shadowColor = "rgba(255,200,60,.9)";
-    ctx.shadowBlur = r*0.9;
-    ctx.beginPath();
-    for(let i=0;i<10;i++){
-      const ang = (Math.PI/5)*i - Math.PI/2;
-      const rad = i%2 ? r*0.46 : r;
-      const px = Math.cos(ang)*rad, py = Math.sin(ang)*rad;
-      i ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
-    }
-    ctx.closePath(); ctx.fill();
+    const scale = r / starSpriteR;
+    ctx.drawImage(starSpriteCanvas, -starSpriteCanvas.width/2*scale, -starSpriteCanvas.height/2*scale,
+                  starSpriteCanvas.width*scale, starSpriteCanvas.height*scale);
     ctx.restore();
+
+    // Three tiny sparkles orbiting the star — reads as magic energy,
+    // pulls the eye toward the chase target. Plain arcs, near-free — and
+    // the first thing dropped when the device can't hold a steady frame
+    // rate (see liteMode).
+    if(!liteMode){
+      ctx.save();
+      ctx.fillStyle = "#fff8d8";
+      for(let i=0;i<3;i++){
+        const ang = now/300 + i*(Math.PI*2/3);
+        const sx = fx + Math.cos(ang)*r*1.75;
+        const sy = fy + Math.sin(ang)*r*1.75;
+        ctx.globalAlpha = 0.5 + 0.5*Math.sin(now/180 + i*2.1);
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(1.2, r*0.14), 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     // countdown ring
     ctx.save();
@@ -4581,6 +5458,28 @@ function resumeGame() {
 
   // Power-up token: a colored bubble with its icon and the same draining
   // countdown ring as the golden star, so its lifetime is obvious.
+  // Perf: the bubble + icon is pre-rendered once per type (its old
+  // per-frame shadowBlur + gradient were expensive), the aura is a cached
+  // glow stamp; only the countdown ring is drawn live.
+  const powerSpriteCache = {};
+  let powerSpriteBaseR = 0;
+  function buildPowerSprite(type, r){
+    const size = Math.ceil(r*2.3);
+    const c = document.createElement("canvas");
+    c.width = size; c.height = size;
+    const g = c.getContext("2d");
+    const cfg = POWER_TYPES[type];
+    const cx = size/2, cy = size/2;
+    g.fillStyle = "rgba(6,20,13,.9)";
+    g.strokeStyle = cfg.color;
+    g.lineWidth = Math.max(2, r*0.25);
+    g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.fill(); g.stroke();
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "900 " + Math.round(r*1.15) + "px Tahoma,Arial,sans-serif";
+    g.fillStyle = cfg.ring;
+    g.fillText(cfg.icon, cx, cy + r*0.05);
+    powerSpriteCache[type] = c;
+  }
   function drawPowerUp(s){
     if(!powerUp) return;
     const now = performance.now();
@@ -4591,26 +5490,18 @@ function resumeGame() {
     const pulse = 1 + Math.sin(now/150)*0.1;
     const r = s*0.36*pulse;
 
-    const glow = ctx.createRadialGradient(fx,fy,0,fx,fy,r*2.4);
-    glow.addColorStop(0, cfg.color + "88");
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(fx,fy,r*2.4,0,Math.PI*2); ctx.fill();
+    // aura from the glow sprite cache (was a per-frame radial gradient)
+    const rgb = hexToRgb(cfg.color);
+    drawGlow(rgb, fx, fy, r*2.4, 0.53);
 
-    ctx.save();
-    ctx.fillStyle = "rgba(6,20,13,.9)";
-    ctx.strokeStyle = cfg.color;
-    ctx.lineWidth = Math.max(2, s*0.09);
-    ctx.shadowColor = cfg.color; ctx.shadowBlur = r*0.8;
-    ctx.beginPath(); ctx.arc(fx,fy,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "900 " + Math.round(r*1.15) + "px Tahoma,Arial,sans-serif";
-    ctx.fillStyle = cfg.ring;
-    ctx.fillText(cfg.icon, fx, fy + r*0.05);
-    ctx.restore();
+    if(!powerSpriteCache[powerUp.type] || Math.abs(powerSpriteBaseR - s*0.36) > 0.5){
+      buildPowerSprite(powerUp.type, s*0.36);
+      powerSpriteBaseR = s*0.36;
+    }
+    const spr = powerSpriteCache[powerUp.type];
+    const scale = r / (s*0.36);
+    ctx.drawImage(spr, fx - spr.width/2*scale, fy - spr.height/2*scale,
+                  spr.width*scale, spr.height*scale);
 
     ctx.save();
     ctx.lineWidth = Math.max(2, s*0.1);
@@ -4627,21 +5518,23 @@ function resumeGame() {
     if(!floatTexts.length) return;
     const now = performance.now();
     const DUR = 750;
-    floatTexts = floatTexts.filter(f => now - f.born < DUR);
     const s = canvas.width / cells;
-    ctx.save();
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    floatTexts.forEach(function(f){
+    let w = 0;
+    for(let i=0;i<floatTexts.length;i++){
+      const f = floatTexts[i];
+      if(now - f.born >= DUR) continue;
+      floatTexts[w++] = f;
       const t = (now - f.born)/DUR;
-      ctx.globalAlpha = Math.max(0, 1-t);
+      ctx.globalAlpha = 1 - t;
       ctx.font = "900 " + Math.round(s*0.95*(1 + 0.25*(1-t))) + "px Tahoma,Arial,sans-serif";
       ctx.lineWidth = Math.max(2, s*0.12);
       ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.strokeText(f.text, f.x, f.y - s*1.5*t);
       ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y - s*1.5*t);
-    });
-    ctx.restore();
+    }
+    floatTexts.length = w;
     ctx.globalAlpha = 1;
   }
 
@@ -4653,22 +5546,17 @@ function resumeGame() {
     const baseR = s*.34; // sprite is built at the un-pulsed radius, then scaled
 
     // Soft ambient glow behind the food — modern "inner glow" look,
-    // and reads clearly on the grass background. Kept as a small live
-    // gradient (cheap) since it needs to track the exact pulsing radius.
+    // and reads clearly on the grass background. Stamped from the cached
+    // glow sprite (one drawImage) instead of building a fresh radial
+    // gradient every frame — same look, a fraction of the cost.
     const activeFood = getStageFood();
-    const glowColors = {
-      apple:"rgba(255,60,50,.35)",
-      strawberry:"rgba(255,60,110,.35)",
-      grape:"rgba(150,80,255,.35)",
-      star:"rgba(255,205,60,.4)"
+    const glowRGB = {
+      apple:"255,60,50",
+      strawberry:"255,60,110",
+      grape:"150,80,255",
+      star:"255,205,60"
     };
-    const glow = ctx.createRadialGradient(fx,fy,0,fx,fy,r*2.2);
-    glow.addColorStop(0, glowColors[activeFood] || glowColors.apple);
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(fx,fy,r*2.2,0,Math.PI*2);
-    ctx.fill();
+    drawGlow(glowRGB[activeFood] || glowRGB.apple, fx, fy, r*2.2, 0.35);
 
     // The shape itself (apple/strawberry/grape/star) is pre-rendered once
     // per food type + board size and reused every frame — only the tiny
@@ -4829,78 +5717,124 @@ function resumeGame() {
     c.fill();
   }
 
-  // A single continuous, rounded snake body (no separated blocks) using a
-  // round-joined stroked path, plus a distinct rounded head with eyes.
-  // Renders the snake onto the given context (defaults to the main
-  // on-screen ctx). Used both directly and to build the cached offscreen
-  // glow sprite in drawSnakeCached().
-  function drawSnake(s, targetCtx){
-    const c = targetCtx || ctx;
+  // ================================================================
+  // The snake, drawn LIVE every frame (no offscreen sprite anymore):
+  //  - every segment is interpolated between its previous and current
+  //    grid cell, so the body glides smoothly at display frequency;
+  //  - the neon glow is a cheap wide translucent stroke (no shadowBlur);
+  //  - the head has a soft radial halo, blinking eyes whose pupils
+  //    track the food, and a forked tongue that flicks periodically;
+  //  - on death the whole body fades out (death dissolve) while the
+  //    particle burst covers it.
+  // ================================================================
+  const skinGlowRgbCache = {};
+  function skinGlowRgb(activeSkin){
+    let rgb = skinGlowRgbCache[activeSkin];
+    if(rgb) return rgb;
+    const glowStr = (skinColors[activeSkin] || skinColors.classic).glow || "";
+    const m = /rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(glowStr);
+    rgb = m ? (m[1] + "," + m[2] + "," + m[3]) : "80,255,150";
+    skinGlowRgbCache[activeSkin] = rgb;
+    return rgb;
+  }
+
+  // Reusable point pools for the interpolated renderers (see drawSnake).
+  const _snakePtsPool = [];
+  const _botPtsPool = [];
+
+  function drawSnake(s){
+    const c = ctx;
+    if(!snake.length) return;
     const sizeMap = {small:.6,normal:.72,large:.86};
     const factor = sizeMap[settings.snakeSize] || .72;
     const w = s*factor;
     const activeSkin = getStageSkin();
     const skin = skinColors[activeSkin] || skinColors.classic;
+    const now = performance.now();
 
+    // ===== Interpolation fraction (0..1 between grid steps) =====
+    let f = 1;
+    if(running && !paused && !gameOver && prevSnake.length && now >= lastTickTime){
+      f = Math.min(1, (now - lastTickTime) / Math.max(60, curInterval));
+    }
+
+    // ===== Death dissolve: fade the whole snake out after a crash =====
+    let bodyAlpha = 1;
+    if(gameOver && deathFadeStart){
+      const dEl = (now - deathFadeStart) / DEATH_FADE_MS;
+      if(dEl >= 1) return;
+      bodyAlpha = Math.max(0, 1 - dEl);
+    }
+
+    // ===== Interpolated pixel centers (index 0 = head) =====
+    // Points live in a reusable pool: allocating a fresh {x,y} object for
+    // every segment on every frame created steady garbage-collector work
+    // that showed up as periodic stutters on phones. Same values, zero
+    // allocations after the first seconds of play.
+    const pts = _snakePtsPool;
+    pts.length = snake.length;
+    for(let i=0;i<snake.length;i++){
+      const cur = snake[i];
+      const prev = i < prevSnake.length ? prevSnake[i] : cur;
+      let p = pts[i];
+      if(!p) p = pts[i] = {x:0, y:0};
+      if(f >= 1 || prev === cur || Math.abs(cur.x-prev.x) > 1 || Math.abs(cur.y-prev.y) > 1){
+        p.x = cur.x*s+s/2; p.y = cur.y*s+s/2;
+      }else{
+        p.x = (prev.x+(cur.x-prev.x)*f)*s+s/2;
+        p.y = (prev.y+(cur.y-prev.y)*f)*s+s/2;
+      }
+    }
+
+    c.save();
+    c.globalAlpha = bodyAlpha;
     c.lineCap = "round";
     c.lineJoin = "round";
 
-    if(snake.length > 1){
+    if(pts.length > 1){
       c.beginPath();
-      // When wallMode is "wrap", the head can jump straight from one edge
-      // of the board to the opposite edge. The very next segment behind it
-      // still sits on the old side, so a plain lineTo() between them would
-      // stretch one huge diagonal/horizontal stroke across the whole
-      // board — which is exactly the oversized golden bar bug. We detect
-      // that jump (two consecutive segments more than 1 cell apart) and
-      // start a fresh sub-path there instead of connecting them, so each
-      // piece of the snake keeps its normal width on both sides of the wall.
-      let prev = null;
-      for(let i=snake.length-1;i>=0;i--){
-        const p = snake[i];
-        const cx = p.x*s+s/2, cy = p.y*s+s/2;
-        const wrapped = prev && (Math.abs(p.x-prev.x) > 1 || Math.abs(p.y-prev.y) > 1);
-        if(i === snake.length-1 || wrapped) c.moveTo(cx,cy); else c.lineTo(cx,cy);
-        prev = p;
+      // Wrap-seam guard (kept from the old renderer): when the head
+      // teleports across a wall, the two adjacent segments sit on
+      // opposite edges — start a fresh sub-path instead of stretching
+      // one stroke across the whole board.
+      for(let i=pts.length-1;i>=0;i--){
+        if(i === pts.length-1){ c.moveTo(pts[i].x, pts[i].y); continue; }
+        const dx = Math.abs(pts[i].x-pts[i+1].x), dy = Math.abs(pts[i].y-pts[i+1].y);
+        if(dx > s*1.5 || dy > s*1.5) c.moveTo(pts[i].x, pts[i].y);
+        else c.lineTo(pts[i].x, pts[i].y);
       }
+      // Pass 1 — outer neon glow: one wide translucent stroke of the SAME
+      // path. This replaces the old shadowBlur sprite and costs a fraction
+      // of it, which is what makes per-frame live drawing viable.
+      c.save();
+      c.globalAlpha = bodyAlpha * 0.32;
+      c.lineWidth = w*1.75;
+      c.strokeStyle = skin.glow;
+      c.stroke();
+      c.restore();
+      // Pass 2 — the body itself, tail→head gradient.
+      const grad = c.createLinearGradient(pts[pts.length-1].x, pts[pts.length-1].y, pts[0].x, pts[0].y);
       if(skin.rainbow){
-        const grad = c.createLinearGradient(
-          snake[snake.length-1].x*s, snake[snake.length-1].y*s,
-          snake[0].x*s, snake[0].y*s
-        );
         grad.addColorStop(0,"#7c5cff");
         grad.addColorStop(0.33,"#5cc8ff");
         grad.addColorStop(0.66,"#5cffb0");
         grad.addColorStop(1,"#ff9ad6");
-        c.strokeStyle = grad;
       }else{
-        const grad = c.createLinearGradient(
-          snake[snake.length-1].x*s, snake[snake.length-1].y*s,
-          snake[0].x*s, snake[0].y*s
-        );
         grad.addColorStop(0, skin.tail);
         grad.addColorStop(1, skin.head);
-        c.strokeStyle = grad;
       }
       c.lineWidth = w;
-      // Soft neon glow along the body — a subtle 2026-style "inner glow"
-      // that keeps the snake readable and modern-looking on the lawn.
-      c.save();
-      c.shadowColor = skin.glow;
-      c.shadowBlur = w*0.6;
+      c.strokeStyle = grad;
       c.stroke();
-      c.restore();
     }
 
     // ===== Swallow bulge (traveling gulp) =====
     // Right after eating, a bulge appears at the head and travels down the
     // body toward the middle — like the food is actually moving down the
-    // throat — instead of the whole head-to-mid stretch swelling all at
-    // once. We draw the bulge segment-by-segment so each one gets its own
-    // width based on how close the traveling wave currently is to it, on
-    // top of the normal body, so it reads as the body itself swelling.
-    if(snake.length > 2){
-      const swallowElapsed = performance.now() - swallowStart;
+    // throat. Now built on the INTERPOLATED points, so the bulge stays
+    // glued to the body while it glides (it used to lag on grid cells).
+    if(pts.length > 2){
+      const swallowElapsed = now - swallowStart;
       if(swallowElapsed >= 0 && swallowElapsed < SWALLOW_DURATION){
         const t = swallowElapsed / SWALLOW_DURATION;
         // Fast gulp in, slower ease back out — controls overall amplitude
@@ -4908,29 +5842,22 @@ function resumeGame() {
         // that amplitude is currently centered.
         const envelope = t < 0.3 ? (t/0.3) : Math.max(0, 1 - (t-0.3)/0.7);
         if(envelope > 0.02){
-          const targetIndex = Math.max(1, Math.min(snake.length-1, Math.round(snake.length/2)));
-          // wavePos sweeps from the head (0) down to targetIndex over the
-          // full duration, so the bulge is at the head first and eases
-          // down toward mid-body as time passes — top-to-bottom, gradual.
+          const targetIndex = Math.max(1, Math.min(pts.length-1, Math.round(pts.length/2)));
           const wavePos = t * targetIndex;
           const waveSpread = Math.max(1.1, targetIndex * 0.55);
           c.save();
-          c.lineCap = "round";
-          c.lineJoin = "round";
           c.strokeStyle = skin.rainbow ? "#ff9ad6" : skin.head;
-          c.shadowColor = skin.glow;
           for(let i=targetIndex;i>0;i--){
-            const p0 = snake[i], p1 = snake[i-1];
-            if(Math.abs(p0.x-p1.x) > 1 || Math.abs(p0.y-p1.y) > 1) continue; // skip wrap seam
+            const p0 = pts[i], p1 = pts[i-1];
+            if(Math.abs(p0.x-p1.x) > s*1.5 || Math.abs(p0.y-p1.y) > s*1.5) continue; // wrap seam
             const mid = i - 0.5;
             const hump = Math.max(0, 1 - Math.abs(mid - wavePos)/waveSpread);
             if(hump <= 0.02) continue;
             const bulgeW = w * (1 + envelope*hump*0.95);
             c.lineWidth = bulgeW;
-            c.shadowBlur = bulgeW*0.6;
             c.beginPath();
-            c.moveTo(p0.x*s+s/2, p0.y*s+s/2);
-            c.lineTo(p1.x*s+s/2, p1.y*s+s/2);
+            c.moveTo(p0.x, p0.y);
+            c.lineTo(p1.x, p1.y);
             c.stroke();
           }
           c.restore();
@@ -4938,97 +5865,150 @@ function resumeGame() {
       }
     }
 
-    // Head — drawn as a crisp circle on top so it always reads clearly.
-    // A quick squash/pop bounce plays right when food is eaten (headPopUntil,
-    // set in gameLoop) instead of the head just silently getting longer.
-    const head = snake[0];
-    const hx = head.x*s+s/2, hy = head.y*s+s/2;
+  // ===== Head — crisp circle + soft radial halo =====
+    // The halo is a cached glow-sprite stamp (one drawImage) instead of a
+    // fresh createRadialGradient every frame; on struggling devices the
+    // halo is skipped entirely (liteMode) — the wide body stroke already
+    // carries the neon look on its own.
+    const hx = pts[0].x, hy = pts[0].y;
     let headScale = 1;
-    if(performance.now() < headPopUntil){
-      const t = 1 - (headPopUntil - performance.now())/260;
+    if(now < headPopUntil){
+      const t = 1 - (headPopUntil - now)/260;
       headScale = 1 + Math.sin(Math.min(1,Math.max(0,t))*Math.PI)*0.55;
     }
-    c.save();
-    c.shadowColor = skin.glow;
-    c.shadowBlur = w*0.7*headScale;
+    const hR = (w/2)*headScale;
+    if(!liteMode){
+      drawGlow(skinGlowRgb(activeSkin), hx, hy, hR*2.4, 0.5*bodyAlpha);
+    }
     c.fillStyle = skin.rainbow ? "#ff9ad6" : skin.head;
     c.beginPath();
-    c.arc(hx,hy,(w/2)*headScale,0,Math.PI*2);
+    c.arc(hx,hy,hR,0,Math.PI*2);
     c.fill();
+
+    // ===== Tongue flick — a quick forked flick every few seconds =====
+    if(!gameOver){
+      const flickPhase = now % 3100;
+      if(flickPhase < 300){
+        const tt = Math.sin((flickPhase/300)*Math.PI);   // 0→1→0
+        const len = w*(0.5 + 0.6*tt);
+        const dx = direction.x, dy = direction.y;
+        const sx = hx + dx*hR*0.9, sy = hy + dy*hR*0.9;
+        const ex = hx + dx*(hR*0.9 + len), ey = hy + dy*(hR*0.9 + len);
+        const px = -dy, py = dx;                          // perpendicular
+        c.strokeStyle = "#e0524a";
+        c.lineWidth = Math.max(1.5, w*0.11);
+        c.beginPath();
+        c.moveTo(sx,sy); c.lineTo(ex,ey);
+        c.moveTo(ex,ey); c.lineTo(ex + (dx*0.4+px*0.35)*len*0.5, ey + (dy*0.4+py*0.35)*len*0.5);
+        c.moveTo(ex,ey); c.lineTo(ex + (dx*0.4-px*0.35)*len*0.5, ey + (dy*0.4-py*0.35)*len*0.5);
+        c.stroke();
+      }
+    }
+
+    // ===== Eyes: white balls + pupils that TRACK the food + blink =====
+    // Positions stay oriented by travel direction (as before), but each
+    // eye is now a white ball with a dark pupil offset toward the food
+    // and a tiny glint — the snake instantly feels alive and purposeful.
+    let e1x=hx-w*.18, e2x=hx+w*.18, ey=hy-w*.20;
+    if(direction.x === 1){ e1x=hx+w*.18; e2x=hx+w*.18; ey=hy-w*.20; }
+    if(direction.x === -1){ e1x=hx-w*.18; e2x=hx-w*.18; ey=hy-w*.20; }
+    if(direction.y === 1){ e1x=hx-w*.18; e2x=hx+w*.18; ey=hy+w*.18; }
+    if(direction.y === -1){ e1x=hx-w*.18; e2x=hx+w*.18; ey=hy-w*.18; }
+    const blinkPhase = now % 4300;
+    const blinking = blinkPhase > 3980 && blinkPhase < 4130;
+    if(blinking){
+      // closed lids: two short dark lines
+      c.strokeStyle = skin.eye;
+      c.lineWidth = Math.max(1.2, s*0.03);
+      c.beginPath();
+      c.moveTo(e1x - s*0.05, ey); c.lineTo(e1x + s*0.05, ey);
+      c.moveTo(e2x - s*0.05, ey); c.lineTo(e2x + s*0.05, ey);
+      c.stroke();
+    }else{
+      const eyeR = s*0.088;
+      const fdx = food.x*s+s/2 - hx, fdy = food.y*s+s/2 - hy;
+      const fd = Math.max(1, Math.sqrt(fdx*fdx+fdy*fdy));
+      const ox = (fdx/fd)*s*0.032, oy = (fdy/fd)*s*0.032;
+      c.fillStyle = "#ffffff";
+      c.beginPath(); c.arc(e1x,ey,eyeR,0,Math.PI*2); c.fill();
+      c.beginPath(); c.arc(e2x,ey,eyeR,0,Math.PI*2); c.fill();
+      c.fillStyle = skin.eye;
+      c.beginPath(); c.arc(e1x+ox,ey+oy,eyeR*0.55,0,Math.PI*2); c.fill();
+      c.beginPath(); c.arc(e2x+ox,ey+oy,eyeR*0.55,0,Math.PI*2); c.fill();
+      c.fillStyle = "rgba(255,255,255,.85)";
+      c.beginPath(); c.arc(e1x+ox-eyeR*0.2,ey+oy-eyeR*0.2,eyeR*0.16,0,Math.PI*2); c.fill();
+      c.beginPath(); c.arc(e2x+ox-eyeR*0.2,ey+oy-eyeR*0.2,eyeR*0.16,0,Math.PI*2); c.fill();
+    }
     c.restore();
-
-    // Eyes, oriented toward the direction of travel.
-    c.fillStyle = skin.eye;
-    let ex1=hx-w*.18, ex2=hx+w*.18, ey=hy-w*.20;
-    if(direction.x === 1){ ex1=hx+w*.18; ex2=hx+w*.18; ey=hy-w*.20; }
-    if(direction.x === -1){ ex1=hx-w*.18; ex2=hx-w*.18; ey=hy-w*.20; }
-    if(direction.y === 1){ ex1=hx-w*.18; ex2=hx+w*.18; ey=hy+w*.18; }
-    if(direction.y === -1){ ex1=hx-w*.18; ex2=hx+w*.18; ey=hy-w*.18; }
-    c.beginPath();c.arc(ex1,ey,s*.055,0,Math.PI*2);c.fill();
-    c.beginPath();c.arc(ex2,ey,s*.055,0,Math.PI*2);c.fill();
-  }
-
-  // Draws the snake via the cached offscreen sprite, only re-rendering
-  // that sprite (the expensive shadowBlur pass) when the snake has
-  // actually moved/changed since the last render, instead of every frame.
-  function drawSnakeCached(s){
-    if(!snake.length) return;
-    if(!snakeCanvas){
-      snakeCanvas = document.createElement("canvas");
-      snakeCtx = snakeCanvas.getContext("2d");
-    }
-    if(snakeCanvas.width !== canvas.width || snakeCanvas.height !== canvas.height){
-      snakeCanvas.width = canvas.width;
-      snakeCanvas.height = canvas.height;
-      snakeDirty = true;
-    }
-    if(snakeDirty){
-      snakeCtx.clearRect(0,0,snakeCanvas.width,snakeCanvas.height);
-      drawSnake(s, snakeCtx);
-      snakeDirty = false;
-    }
-    ctx.drawImage(snakeCanvas,0,0);
   }
 
   // ===== Bot opponent rendering (robot mode) =====
-  // A deliberately simpler render than the player's own drawSnake (no
-  // offscreen caching, no skins) — it's a short-lived opponent snake, not
-  // worth the extra complexity, and the visual contrast (solid red) makes
-  // it instantly readable as "not you" on the board.
+  // Solid red so it reads instantly as "not you", but now it ALSO gets
+  // the same interpolated glide as the player's snake (prevBotSnake →
+  // botSnake lerped by the same tick fraction), so both snakes move at
+  // the same silky smoothness instead of the bot snapping cell to cell.
   function drawBotSnakeSimple(s){
+    if(!botSnake.length) return;
     const sizeMap = {small:.6,normal:.72,large:.86};
     const factor = sizeMap[settings.snakeSize] || .72;
     const w = s*factor;
+    const now = performance.now();
+
+    let f = 1;
+    if(running && !paused && !gameOver && prevBotSnake.length && now >= lastTickTime){
+      f = Math.min(1, (now - lastTickTime) / Math.max(60, curInterval));
+    }
+
+    // Same pooled-point technique as the player snake (zero per-frame
+    // allocations while the bot glides).
+    const pts = _botPtsPool;
+    pts.length = botSnake.length;
+    for(let i=0;i<botSnake.length;i++){
+      const cur = botSnake[i];
+      const prev = i < prevBotSnake.length ? prevBotSnake[i] : cur;
+      let p = pts[i];
+      if(!p) p = pts[i] = {x:0, y:0};
+      if(f >= 1 || prev === cur || Math.abs(cur.x-prev.x) > 1 || Math.abs(cur.y-prev.y) > 1){
+        p.x = cur.x*s+s/2; p.y = cur.y*s+s/2;
+      }else{
+        p.x = (prev.x+(cur.x-prev.x)*f)*s+s/2;
+        p.y = (prev.y+(cur.y-prev.y)*f)*s+s/2;
+      }
+    }
+
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    if(botSnake.length > 1){
+    if(pts.length > 1){
       ctx.beginPath();
-      let prev = null;
-      for(let i=botSnake.length-1;i>=0;i--){
-        const p = botSnake[i];
-        const cx = p.x*s+s/2, cy = p.y*s+s/2;
-        const wrapped = prev && (Math.abs(p.x-prev.x) > 1 || Math.abs(p.y-prev.y) > 1);
-        if(i === botSnake.length-1 || wrapped) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy);
-        prev = p;
+      for(let i=pts.length-1;i>=0;i--){
+        if(i === pts.length-1){ ctx.moveTo(pts[i].x, pts[i].y); continue; }
+        const dx = Math.abs(pts[i].x-pts[i+1].x), dy = Math.abs(pts[i].y-pts[i+1].y);
+        if(dx > s*1.5 || dy > s*1.5) ctx.moveTo(pts[i].x, pts[i].y);
+        else ctx.lineTo(pts[i].x, pts[i].y);
       }
+      // cheap double-stroke glow (same technique as the player snake)
+      ctx.save();
+      ctx.globalAlpha = 0.30;
+      ctx.strokeStyle = "rgba(255,60,60,.65)";
+      ctx.lineWidth = w*1.7;
+      ctx.stroke();
+      ctx.restore();
       ctx.strokeStyle = "#ff5a5a";
-      ctx.shadowColor = "rgba(255,60,60,.65)";
-      ctx.shadowBlur = w*0.55;
       ctx.lineWidth = w;
       ctx.stroke();
     }
 
-    const head = botSnake[0];
-    const hx = head.x*s+s/2, hy = head.y*s+s/2;
-    ctx.shadowBlur = w*0.6;
+    const hx = pts[0].x, hy = pts[0].y;
+    // cached glow-sprite stamp instead of a per-frame radial gradient;
+    // skipped entirely in liteMode (the wide stroke already glows).
+    if(!liteMode) drawGlow("255,60,60", hx, hy, w*1.2, 0.6);
     ctx.fillStyle = "#ff2e2e";
     ctx.beginPath();
     ctx.arc(hx,hy,w/2,0,Math.PI*2);
     ctx.fill();
 
-    ctx.shadowBlur = 0;
     ctx.fillStyle = "#fff";
     let ex1=hx-w*.18, ex2=hx+w*.18, ey=hy-w*.20;
     if(botDirection.x === 1){ ex1=hx+w*.18; ex2=hx+w*.18; ey=hy-w*.20; }
@@ -5250,6 +6230,10 @@ function resumeGame() {
     headPopUntil = 0;
     foodRing = null;
     swallowStart = -Infinity;
+    prevSnake = [];
+    prevBotSnake = [];
+    deathFadeStart = 0;
+    recordBeaten = false;
     $("pauseBtn").disabled = true;
     $("pauseBtnText").textContent = "توقف";
     $("pauseBtn").classList.remove("resume");
@@ -5334,7 +6318,13 @@ function resumeGame() {
 
   $("clearBotLeaderboardBtn").onclick = function(){
     clearBotRecords();
-    renderBotLeaderboard();
+    // Re-render from the active source: online if reachable, otherwise
+    // the (now empty) local fallback.
+    loadBotLeaderboard();
+  };
+
+  $("refreshBotLeaderboardBtn").onclick = function(){
+    loadBotLeaderboard();
   };
 
   // Initial render
